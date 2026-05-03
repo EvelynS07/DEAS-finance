@@ -1,8 +1,3 @@
-// --- FIREBASE DO DEASBANK ---
-// Cadastro: nome, e-mail e senha.
-// Login: e-mail e senha.
-// CPF removido para evitar conflito.
-
 const deasFinanceConfig = {
     apiKey: "AIzaSyCCfx1qpBgVkIyOfIX05QqMFmsY_7L7q-M",
     authDomain: "deas-finance.firebaseapp.com",
@@ -52,7 +47,7 @@ const ClientRegistry = {
 };
 
 let currentUserId = null;
-let currentUserCpf = null; // compatibilidade com funções antigas; agora guarda o UID.
+let currentUserCpf = null; // compatibilidade com funções antigas; guarda o UID.
 let openFinanceListMode = "pending";
 
 function moneyBR(value) {
@@ -148,7 +143,7 @@ async function logout() {
     location.reload();
 }
 
-// --- CADASTRO SEM CPF ---
+// --- CADASTRO ---
 document.getElementById("registerForm").addEventListener("submit", async function(e) {
     e.preventDefault();
 
@@ -971,8 +966,6 @@ function maskEmailForOpenFinance(email) {
     const [user, domain] = String(email || "cliente@email.com").split("@");
     return `${user.slice(0, 3)}***@${domain || "email.com"}`;
 }
-
-
 /* Open Finance profissional v5 - overrides seguros */
 function getBankFinancialSnapshot(afterBalance) {
     const user = ClientRegistry.get(currentUserId) || {};
