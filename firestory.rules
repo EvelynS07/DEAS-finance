@@ -4,22 +4,27 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if true;
 
-      // Permite o banco parceiro creditar saldo ou espelhar conexão no protótipo
-      allow create, update: if request.resource.data.lastOpenFinanceMoveReason is string
-        || request.resource.data.sameOwner == true;
+      match /transactions/{txId} {
+        allow read, write: if true;
+      }
 
       match /openFinanceConnections/{connId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-
-        // Permite o banco parceiro espelhar a conexão no protótipo
-        allow create, update: if request.resource.data.sameOwner == true;
+        allow read, write: if true;
       }
+    }
+
+    match /accounts/{userId} {
+      allow read, write: if true;
     }
 
     match /openFinanceRequests/{requestId} {
       allow read, create, update, delete: if true;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
