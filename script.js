@@ -948,7 +948,7 @@ async function syncDeasFinanceResponse() {
                     const updatedUser = await applyDeasBankBalanceDelta(update.importedSalary, moveId, "Salário recebido do Deas Finance");
                     update.appliedMoneyMoveId = moveId;
                     update.moneyMovedApplied = true;
-                    alert(`Salário transferido: ${formatOpenFinanceMoney(update.importedSalary)} entrou no saldo real do DeasBank. Saldo atual: ${formatOpenFinanceMoney(updatedUser.saldo)}.`);
+                    alert(`Salário transferido: ${formatOpenFinanceMoney(update.importedSalary)} entrou no saldo disponível do DeasBank. Saldo atual: ${formatOpenFinanceMoney(updatedUser.saldo)}.`);
                 } else if (alreadyApplied) {
                     update.appliedMoneyMoveId = local.appliedMoneyMoveId || moveId;
                     update.moneyMovedApplied = true;
@@ -1023,7 +1023,7 @@ async function applyDeasBankBalanceDeltaOnce(amount, moveId, reason = 'Open Fina
 function refreshOpenFinanceMirrors(){
     const user = ClientRegistry.get(currentUserId) || {};
     const set=(id,v)=>{const el=document.getElementById(id); if(el) el.innerText=v};
-    set('ofRealBalanceBank', formatOpenFinanceMoney(user.saldo || 0));
+    set('ofAvailableBalanceBank', formatOpenFinanceMoney(user.saldo || 0));
     set('ofBankLimitMirror', formatOpenFinanceMoney(user.limite || 0));
     set('ofBankDebtMirror', formatOpenFinanceMoney(sumDebts(user.dividas || [])));
 }
@@ -1102,7 +1102,7 @@ approveOpenFinanceRequest = async function(requestId, requestType = '') {
             updatePayload.requestedData = { importedSalary: amount, requestedSalaryAmount: amount, ...snapshot, relationshipSummary: updatePayload.relationshipSummary };
         }
         await deasBankDb.collection('openFinanceRequests').doc(requestId).update(updatePayload);
-        alert(type === 'data_transfer_request' ? 'Dados liberados. O outro banco deve sincronizar para o dinheiro cair no saldo real dele.' : 'Conexão aceita.');
+        alert(type === 'data_transfer_request' ? 'Dados liberados. O outro banco deve sincronizar para o dinheiro cair no saldo disponível dele.' : 'Conexão aceita.');
         loadOpenFinanceRequests();
     } catch(error) { alert('Erro ao aceitar: ' + error.message); }
 };
@@ -1172,7 +1172,7 @@ syncDeasFinanceResponse = async function() {
                 const result = await applyDeasBankBalanceDeltaOnce(amount, moveId + '_destino_deasbank', 'Portabilidade recebida do Deas Finance');
                 update.appliedMoneyMoveId = moveId;
                 update.moneyMovedApplied = true;
-                if (result.applied) alert(`Portabilidade concluída: ${formatOpenFinanceMoney(amount)} entrou no saldo real do DeasBank.`);
+                if (result.applied) alert(`Portabilidade concluída: ${formatOpenFinanceMoney(amount)} entrou no saldo disponível do DeasBank.`);
             }
             const user = ClientRegistry.get(currentUserId) || {};
             user.scoreOriginal = Math.min(950, Math.max(Number(user.scoreOriginal || 500), update.externalScore || 0) + (amount >= 3000 ? 30 : 10));
@@ -1192,4 +1192,158 @@ const originalLoadOpenFinanceRequestsV5 = loadOpenFinanceRequests;
 loadOpenFinanceRequests = async function(){
     refreshOpenFinanceMirrors();
     await originalLoadOpenFinanceRequestsV5();
+};
+
+
+/* ===================== OPEN FINANCE V8 - PROFISSIONAL =====================
+   - Conexão aceita em qualquer banco passa a valer para os dois lados.
+   - Score é compartilhado já na conexão e novamente nos dados.
+   - Portabilidade credita diretamente o saldo disponível do banco destino.
+   - Usa travas por moneyMoveId para não duplicar valores.
+============================================================================ */
+function ofV8SafeKey(value){ return String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_'); }
+function ofV8CurrentScore(){ const u = ClientRegistry.get(currentUserId) || {}; return Number(u.score || u.scoreOriginal || 500); }
+async function mirrorConnectionToBothSidesFromBank(request, status){
+    const isApproved = status === 'connection_approved' || status === 'data_approved' || status === 'data_denied';
+    const payload = {
+        institutionName: 'Deas Finance',
+        partnerKey: 'deasfinance',
+        connectionMode: 'firebase_mutual_openfinance',
+        connectionStatus: status,
+        connectionApproved: isApproved,
+        sameOwner: true,
+        partnerRequestId: request.id || request.partnerRequestId || request.requestId || null,
+        sharedScore: ofV8CurrentScore(),
+        sharedPayload: { ...request, status, connectionStatus: status, sameOwner: true, sharedScore: ofV8CurrentScore() },
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    try { await deasBankDb.collection('users').doc(currentUserId).collection('openFinanceConnections').doc('deasfinance').set(payload,{merge:true}); } catch(e){ console.warn('mirror local bank failed', e); }
+    if (request && request.userId && deasFinanceDb) {
+        try {
+            await deasFinanceDb.collection('users').doc(request.userId).collection('openFinanceConnections').doc('deasbank').set({
+                institutionName: 'DeasBank',
+                partnerKey: 'deasbank',
+                connectionMode: 'firebase_mutual_openfinance',
+                connectionStatus: status,
+                connectionApproved: isApproved,
+                sameOwner: true,
+                partnerRequestId: request.id || request.partnerRequestId || request.requestId || null,
+                sharedScore: ofV8CurrentScore(),
+                sharedPayload: { ...request, status, connectionStatus: status, sameOwner: true, sharedScore: ofV8CurrentScore() },
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, {merge:true});
+        } catch(e){ console.warn('mirror remote finance failed', e); }
+    }
+}
+async function creditDeasFinanceDestinationFromBank(financeUid, amount, moveId, request){
+    amount = Number(amount || 0);
+    if (!financeUid || !deasFinanceDb || amount <= 0) return {applied:false, reason:'sem_valor'};
+    const safe = ofV8SafeKey((moveId || 'openfinance') + '_destino_deasfinance');
+    const ref = deasFinanceDb.collection('accounts').doc(financeUid);
+    const snap = await ref.get();
+    const current = snap.exists ? snap.data() : { balance: 0 };
+    const appliedMoves = current.openFinanceAppliedMoves || {};
+    if (appliedMoves[safe]) return {applied:false, reason:'ja_aplicado'};
+    const nextBalance = Number(current.balance || 0) + amount;
+    await ref.set({
+        ...current,
+        balance: nextBalance,
+        [`openFinanceAppliedMoves.${safe}`]: true,
+        lastOpenFinanceMoveId: safe,
+        lastOpenFinanceMoveReason: 'Portabilidade recebida do DeasBank',
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, {merge:true});
+    try {
+        await deasFinanceDb.collection('users').doc(financeUid).collection('transactions').add({
+            creditor: 'Portabilidade recebida do DeasBank',
+            value: amount,
+            status: 'pago',
+            type: 'Open Finance',
+            date: new Date().toLocaleDateString('pt-BR'),
+            createdAtText: new Date().toISOString(),
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            moneyMoveId: safe
+        });
+    } catch(e){ console.warn('remote finance tx failed', e); }
+    return {applied:true, nextBalance};
+}
+
+const approveOpenFinanceRequestV7 = approveOpenFinanceRequest;
+approveOpenFinanceRequest = async function(requestId, requestType = ''){
+    if (!deasBankDb) return alert('Firebase não iniciou.');
+    try {
+        const snap = await deasBankDb.collection('openFinanceRequests').doc(requestId).get();
+        if (!snap.exists) return alert('Pedido não encontrado.');
+        const current = { id: requestId, ...snap.data() };
+        const type = requestType || current.requestType;
+        if (current.status === 'data_approved' || current.status === 'connection_approved') return alert('Esse pedido já foi aprovado.');
+        const nextStatus = type === 'data_transfer_request' ? 'data_approved' : 'connection_approved';
+        const user = ClientRegistry.get(currentUserId) || await loadUserFromFirestore(currentUserId) || {};
+        const score = Number(user.score || user.scoreOriginal || 500);
+        const payload = {
+            status: nextStatus,
+            sameOwner: true,
+            connectionApproved: true,
+            sharedScore: score,
+            creditScore: score,
+            analysisMessage: type === 'data_transfer_request' ? 'Dados financeiros completos e portabilidade liberados pelo DeasBank.' : 'Conexão Open Finance aceita pelo DeasBank. A conexão agora vale para os dois bancos.',
+            analyzedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        if (type === 'connection_request') {
+            payload.externalScore = score;
+            payload.relationshipSummary = `Conexão aprovada. Score DeasBank compartilhado: ${score}. Dados financeiros completos exigem consentimento separado.`;
+            await mirrorConnectionToBothSidesFromBank(current, nextStatus);
+        }
+        if (type === 'data_transfer_request') {
+            const requested = current.requestedData || {};
+            const amount = Number(requested.importedSalary || requested.requestedSalaryAmount || current.importedSalary || 0);
+            const available = Number(user.saldo || 0);
+            if (amount > 0 && available < amount) return alert(`Saldo insuficiente no DeasBank para transferir ${formatOpenFinanceMoney(amount)}. Disponível: ${formatOpenFinanceMoney(available)}.`);
+            const moveId = current.moneyMoveId || `move_${requestId}`;
+            if (amount > 0) await applyDeasBankBalanceDeltaOnce(-amount, moveId + '_origem_deasbank', 'Portabilidade enviada ao Deas Finance');
+            const updatedUser = ClientRegistry.get(currentUserId) || user;
+            const externalBalance = Number(updatedUser.saldo || 0);
+            const externalDebt = sumDebts(updatedUser.dividas || []);
+            const externalLimit = Number(updatedUser.limite || 0);
+            const loansTotal = externalDebt;
+            const estimatedIncome = Number(updatedUser.renda || updatedUser.salario || amount || 0);
+            Object.assign(payload, {
+                importedSalary: amount,
+                transferAmount: amount,
+                moneyMoved: amount > 0,
+                moneyMoveId: moveId,
+                transferSourceBank: 'DeasBank',
+                transferDestinationBank: current.sourceBank || 'Deas Finance',
+                externalBalance,
+                externalDebt,
+                externalLimit,
+                loansTotal,
+                investmentsTotal: Number(updatedUser.investimentos || 0),
+                creditScore: score,
+                externalScore: score,
+                estimatedIncome,
+                requestedData: { importedSalary: amount, requestedSalaryAmount: amount, externalBalance, externalDebt, externalLimit, loansTotal, investmentsTotal: Number(updatedUser.investimentos || 0), creditScore: score, estimatedIncome, requestAllFinancialData:true },
+                relationshipSummary: `DeasBank compartilhou salário ${formatOpenFinanceMoney(amount)}, saldo ${formatOpenFinanceMoney(externalBalance)}, dívidas ${formatOpenFinanceMoney(externalDebt)}, limite/cartões ${formatOpenFinanceMoney(externalLimit)}, empréstimos ${formatOpenFinanceMoney(loansTotal)}, score ${score} e renda ${formatOpenFinanceMoney(estimatedIncome)}.`
+            });
+            if (amount > 0 && current.userId) {
+                await creditDeasFinanceDestinationFromBank(current.userId, amount, moveId, current);
+                payload.destinationCredited = true;
+            }
+            await mirrorConnectionToBothSidesFromBank(current, nextStatus);
+            renderDashboard(ClientRegistry.get(currentUserId) || user);
+        }
+        await deasBankDb.collection('openFinanceRequests').doc(requestId).update(payload);
+        updateMutualDataVisibility(nextStatus, true);
+        refreshOpenFinanceMirrors();
+        alert(type === 'data_transfer_request' ? 'Aprovado. O valor foi abatido do DeasBank e creditado no saldo disponível do Deas Finance.' : 'Conexão aprovada. Ela agora vale nos dois bancos.');
+        loadOpenFinanceRequests();
+    } catch(error){ alert('Erro ao aceitar: ' + error.message); console.error(error); }
+};
+
+const oldRenderDeasFinanceImportedDataV8 = renderDeasFinanceImportedData;
+renderDeasFinanceImportedData = function(local = {}){
+    oldRenderDeasFinanceImportedDataV8(local);
+    const scoreEl = document.getElementById('ofExternalScoreBank');
+    const sharedScore = local.externalScore || local.creditScore || local.sharedScore || local.sharedPayload?.creditScore || local.sharedPayload?.sharedScore;
+    if (scoreEl && sharedScore) scoreEl.textContent = String(sharedScore);
 };
