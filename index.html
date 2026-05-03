@@ -98,6 +98,12 @@
                 </div>
 
                 <div class="dash-card">
+                    <h3>Saldo Real</h3>
+                    <h2 class="text-success" id="currentBalanceAmount">R$ 0,00</h2>
+                    <p style="font-size: 13px; color: #888;">Atualiza quando o salário entra ou sai via Open Finance.</p>
+                </div>
+
+                <div class="dash-card">
                     <h3>Dívidas Pendentes</h3>
                     <h2 class="text-danger" id="totalDebtAmount">R$ 0,00</h2>
                     <p id="debtCount" style="font-size: 13px; color: #888;">0 pendências</p>
@@ -147,74 +153,115 @@
             </div>
         </div>
 
-        <!-- Seção Open Finance: integrada mantendo a identidade visual do DEASBank -->
-        <div id="openFinanceSection" class="main-content hidden">
-            <header class="dash-header open-finance-header">
+        <!-- Seção Open Finance profissional -->
+        <div id="openFinanceSection" class="main-content hidden of-pro-page">
+            <header class="dash-header of-pro-hero">
                 <div>
                     <span class="of-eyebrow">Open Finance</span>
-                    <h1>Central Open Finance</h1>
-                    <p>Gerencie conexões, pedidos de dados e transferência de salário com consentimento dos dois bancos.</p>
+                    <h1>Open Finance DeasBank</h1>
+                    <p>Conecte o Deas Finance, compartilhe dados com consentimento, traga salário e gerencie tudo em um só lugar.</p>
                 </div>
-                <button class="btn-dark of-refresh" onclick="loadOpenFinanceRequests()">Atualizar pedidos</button>
+                <div class="of-hero-actions">
+                    <button class="btn-dark" onclick="requestDeasFinanceConnection()">Conectar Deas Finance</button>
+                    <button class="btn-action" onclick="syncDeasFinanceResponse()">Sincronizar respostas</button>
+                    <button class="btn-action" onclick="loadOpenFinanceRequests()">Atualizar</button>
+                    <button class="btn-action of-danger hidden" id="disconnectDeasFinanceBtn" onclick="disconnectDeasFinanceConnection()">Desconectar contas</button>
+                </div>
             </header>
 
-            <div class="summary-grid of-summary-grid">
-                <div class="dash-card of-metric-card">
-                    <span>Solicitações</span>
-                    <h2 id="ofTotalRequests">0</h2>
-                    <p>Recebidas e enviadas.</p>
-                </div>
-                <div class="dash-card of-metric-card">
-                    <span>Pendentes</span>
-                    <h2 id="ofPendingRequests">0</h2>
-                    <p>Aguardando análise do DeasBank.</p>
-                </div>
-                <div class="dash-card of-metric-card">
-                    <span>Aprovadas</span>
-                    <h2 id="ofApprovedRequests">0</h2>
-                    <p>Conexões e dados aceitos.</p>
-                </div>
+            <div class="of-professional-grid">
+                <section class="dash-card of-pro-card of-status-card">
+                    <div class="of-card-head compact">
+                        <div>
+                            <span class="of-eyebrow">Gestão unificada</span>
+                            <h3>Conexão com Deas Finance</h3>
+                        </div>
+                        <span class="of-status" id="deasFinanceConnectionBadge">Sem conexão</span>
+                    </div>
+                    <div class="of-timeline">
+                        <div class="of-step active"><b>1</b><span>Solicitar conexão</span></div>
+                        <div class="of-step" id="ofStepConsentBank"><b>2</b><span>Consentimento aprovado</span></div>
+                        <div class="of-step" id="ofStepDataBank"><b>3</b><span>Dados e salário</span></div>
+                    </div>
+                    <p class="of-note">A senha nunca é compartilhada. O cliente autoriza conexão, dados financeiros e portabilidade de salário separadamente.</p>
+                    <div class="of-action-stack">
+                        <button class="btn-dark" onclick="requestDeasFinanceConnection()">Pedir conexão ao Deas Finance</button>
+                        <button class="btn-dark hidden" id="requestDeasFinanceDataCard" onclick="requestDeasFinanceData()">Portabilidade: trazer salário e dados</button>
+                    </div>
+                </section>
+
+                <section class="dash-card of-pro-card">
+                    <span class="of-eyebrow">Saldo real</span>
+                    <h3>Conta DeasBank</h3>
+                    <strong class="of-big-money" id="ofRealBalanceBank">R$ 0,00</strong>
+                    <p class="of-note">Este é o mesmo saldo real do dashboard. Quando a portabilidade for aceita pelo Deas Finance, o valor entra aqui.</p>
+                    <div class="of-mini-grid two">
+                        <div><small>Limite</small><strong id="ofBankLimitMirror">R$ 0,00</strong></div>
+                        <div><small>Dívidas</small><strong id="ofBankDebtMirror">R$ 0,00</strong></div>
+                    </div>
+                </section>
             </div>
 
-            <div class="summary-grid of-mutual-grid">
-                <div class="dash-card">
-                    <span class="of-eyebrow">Mão dupla</span>
-                    <h3>Pedir conexão ao Deas Finance</h3>
-                    <p style="color:#8c6a59;font-size:13px;line-height:1.5">O DeasBank também pode iniciar o Open Finance. O Deas Finance precisa aceitar ou recusar.</p>
-                    <button class="btn-dark" style="margin-top:10px" onclick="requestDeasFinanceConnection()">Conectar Deas Finance</button>
-                </div>
-                <div class="dash-card hidden" id="requestDeasFinanceDataCard">
-                    <span class="of-eyebrow">Dados financeiros</span>
-                    <h3>Pedir salário, saldo e crédito</h3>
-                    <p style="color:#8c6a59;font-size:13px;line-height:1.5">Após a conexão aprovada, solicite renda, saldo, dívidas, limite e empréstimos ao Deas Finance.</p>
-                    <button class="btn-dark" style="margin-top:10px" onclick="requestDeasFinanceData()">Pedir dados ao Deas Finance</button>
-                </div>
-                <div class="dash-card">
-                    <span class="of-eyebrow">Resposta</span>
-                    <h3>Verificar retorno</h3>
-                    <p style="color:#8c6a59;font-size:13px;line-height:1.5">Sincronize o aceite ou recusa feito no Deas Finance.</p>
-                    <button class="btn-dark" style="margin-top:10px" onclick="syncDeasFinanceResponse()">Verificar Deas Finance</button>
-                </div>
-            </div>
-
-            <div class="dash-card of-consent-card">
+            <section class="dash-card of-pro-card of-onboarding-bank hidden" id="deasFinanceOnboardingPanel">
                 <div class="of-card-head">
                     <div>
-                        <h3>Pedidos recebidos e enviados</h3>
-                        <p>Open Finance mútuo: Deas Finance e DeasBank podem solicitar conexão, pedir dados e aceitar ou recusar.</p>
+                        <span class="of-eyebrow">Como funciona</span>
+                        <h3>Conecte primeiro. Compartilhe depois.</h3>
+                        <p>A visão unificada e a portabilidade só aparecem depois da conexão aprovada. Assim a tela fica limpa mesmo antes de conectar.</p>
                     </div>
-                    <span class="of-secure-badge">Consentimento ativo</span>
                 </div>
+                <div class="of-clean-steps-bank">
+                    <div><strong>1. Conexão</strong><span>Solicite vínculo com o Deas Finance.</span></div>
+                    <div><strong>2. Consentimento</strong><span>O outro banco aceita ou recusa.</span></div>
+                    <div><strong>3. Dados</strong><span>Traga salário, saldo, dívidas, cartões, empréstimos e investimentos.</span></div>
+                </div>
+            </section>
 
-                <div class="of-list-tools">
+            <section class="dash-card of-pro-card of-connected-panel hidden" id="deasFinanceConnectedPanel">
+                <div class="of-card-head">
+                    <div>
+                        <span class="of-eyebrow">Dados compartilhados</span>
+                        <h3>Informações recebidas do Deas Finance</h3>
+                        <p>Histórico, saldo, cartões/limite, empréstimos, dívidas, investimentos simulados e salário ficam organizados aqui.</p>
+                    </div>
+                    <button class="btn-action" onclick="syncDeasFinanceResponse()">Verificar atualização</button>
+                </div>
+                <div class="of-connected-summary of-pro-data-grid">
+                    <div><small>Salário trazido</small><strong id="ofImportedSalaryBank">R$ 0,00</strong></div>
+                    <div><small>Saldo no Deas Finance</small><strong id="ofExternalBalanceBank">R$ 0,00</strong></div>
+                    <div><small>Dívidas</small><strong id="ofExternalDebtBank">R$ 0,00</strong></div>
+                    <div><small>Cartões / limite</small><strong id="ofExternalLimitBank">R$ 0,00</strong></div>
+                    <div><small>Empréstimos</small><strong id="ofExternalLoansBank">R$ 0,00</strong></div>
+                    <div><small>Investimentos</small><strong id="ofExternalInvestmentsBank">R$ 0,00</strong></div>
+                    <div><small>Score</small><strong id="ofExternalScoreBank">-</strong></div>
+                    <div><small>Renda estimada</small><strong id="ofExternalIncomeBank">R$ 0,00</strong></div>
+                </div>
+                <p class="of-relationship-text" id="ofRelationshipSummaryBank">Nenhum dado recebido ainda.</p>
+            </section>
+
+            <section class="dash-card of-pro-card of-consent-card">
+                <div class="of-card-head">
+                    <div>
+                        <span class="of-eyebrow">Consentimentos</span>
+                        <h3>Caixa Open Finance</h3>
+                        <p>Pendências ficam separadas do histórico para a tela não virar bagunça.</p>
+                    </div>
+                    <span class="of-secure-badge">Controle do cliente</span>
+                </div>
+                <div class="of-list-tools of-pro-tabs">
                     <button class="of-filter active" type="button" id="ofFilterPending" onclick="setOpenFinanceListMode('pending')">Pendentes</button>
-                    <button class="of-filter" type="button" id="ofFilterAll" onclick="setOpenFinanceListMode('all')">Todos</button>
                     <button class="of-filter" type="button" id="ofFilterSent" onclick="setOpenFinanceListMode('sent')">Enviados</button>
+                    <button class="of-filter" type="button" id="ofFilterAll" onclick="setOpenFinanceListMode('all')">Histórico</button>
+                </div>
+                <div class="of-kpi-row">
+                    <span><b id="ofTotalRequests">0</b> total</span>
+                    <span><b id="ofPendingRequests">0</b> pendentes</span>
+                    <span><b id="ofApprovedRequests">0</b> aprovados</span>
                 </div>
                 <div id="openFinanceCards" class="of-request-grid">
-                    <div class="of-empty-state">Clique em <strong>Atualizar pedidos</strong> para carregar as solicitações.</div>
+                    <div class="of-empty-state">Clique em atualizar para carregar as solicitações.</div>
                 </div>
-            </div>
+            </section>
         </div>
     </div>   
 
