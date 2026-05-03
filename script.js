@@ -1,8 +1,3 @@
-// --- FIREBASE DO DEASBANK ---
-// Cadastro: nome, e-mail e senha.
-// Login: e-mail e senha.
-// CPF removido para evitar conflito.
-
 const deasFinanceConfig = {
     apiKey: "AIzaSyCCfx1qpBgVkIyOfIX05QqMFmsY_7L7q-M",
     authDomain: "deas-finance.firebaseapp.com",
