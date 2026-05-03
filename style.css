@@ -644,3 +644,36 @@ body {
 .of-status,.of-secure-badge{background:rgba(33,18,11,.1)!important;color:#44210e!important;}
 .of-big-money{color:#1f8c42;}
 @media(max-width:900px){.dashboard-wrapper{display:block}.sidebar{width:100%;height:auto}.main-content{padding:22px}.summary-grid{grid-template-columns:1fr}.of-hero-actions{width:100%}}
+
+
+/* ===================== DEASBANK V9 - DASHBOARD SEM PARTES FLUTUANTES ===================== */
+.dashboard-wrapper{min-height:100vh;height:auto;background:#26140c!important;}
+.main-content{
+  background:linear-gradient(135deg,#fff1d4 0%,#ffd184 48%,#f58a24 100%)!important;
+  min-height:100vh;
+  width:100%;
+}
+.dash-header{background:rgba(255,246,229,.62);border:1px solid rgba(90,46,16,.10);border-radius:22px;padding:18px 20px;box-shadow:0 16px 35px rgba(86,43,8,.08);}
+.summary-grid{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(235px,1fr))!important;gap:18px!important;align-items:stretch!important;}
+.dash-card{
+  background:linear-gradient(145deg,rgba(255,232,186,.96),rgba(255,199,110,.94))!important;
+  border:1px solid rgba(89,43,10,.16)!important;
+  box-shadow:0 18px 42px rgba(91,40,4,.13)!important;
+  border-radius:22px!important;
+}
+.summary-grid .dash-card{min-height:170px;display:flex;flex-direction:column;justify-content:flex-start;}
+.modern-table{background:rgba(255,246,229,.65);border-radius:16px;overflow:hidden;}
+.of-professional-grid{grid-template-columns:1fr!important;gap:16px!important;}
+.of-professional-grid.of-with-balance{grid-template-columns:minmax(0,1.15fr) minmax(280px,.85fr)!important;}
+.of-onboarding-bank{display:none!important;}
+#requestDeasFinanceDataCard.hidden,#deasFinanceConnectedPanel.hidden,#disconnectDeasFinanceBtn.hidden{display:none!important;}
+.of-status-card,.of-pro-card,.of-consent-card,.of-connected-panel{
+  width:100%!important;max-width:none!important;
+}
+.of-status-card .of-note{margin-top:10px;}
+#openFinanceSection .of-card-head,#openFinanceSection .of-timeline,#openFinanceSection .of-action-stack{max-width:none;}
+#openFinanceSection .of-connection-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px;}
+#openFinanceSection .of-connection-metrics>div{background:#fff9f1;border:1px solid rgba(130,74,45,.12);border-radius:18px;padding:14px;}
+#openFinanceSection .of-connection-metrics small{display:block;color:#8a6e5d;font-size:12px;font-weight:800;margin-bottom:5px;}
+#openFinanceSection .of-connection-metrics strong{font-size:16px;color:#3a2116;}
+@media(max-width:980px){.of-professional-grid.of-with-balance{grid-template-columns:1fr!important;}#openFinanceSection .of-connection-metrics{grid-template-columns:1fr}}

@@ -1347,3 +1347,53 @@ renderDeasFinanceImportedData = function(local = {}){
     const sharedScore = local.externalScore || local.creditScore || local.sharedScore || local.sharedPayload?.creditScore || local.sharedPayload?.sharedScore;
     if (scoreEl && sharedScore) scoreEl.textContent = String(sharedScore);
 };
+
+
+/* ===================== DEASBANK V9 - CONEXÃO MÚTUA, SCORE E SALDO DISPONÍVEL ===================== */
+function ofV9BankPartnerScore(local={}){const p=local.sharedPayload||{};return Number(local.externalScore||local.sharedScore||p.externalScore||p.creditScore||p.sharedScore||0)}
+function ofV9BankStatusPriority(c={}){const p=c.sharedPayload||{};const st=String(c.connectionStatus||p.connectionStatus||p.status||'connection_pending');const rank={data_approved:90,data_pending:80,connection_approved:70,data_denied:60,connection_pending:50,connection_denied:20,consent_revoked:10};return rank[st]||0}
+async function ofV9GetBankConnection(){
+  if(!deasBankDb||!currentUserId)return null;
+  const snap=await deasBankDb.collection('users').doc(currentUserId).collection('openFinanceConnections').doc('deasfinance').get();
+  return snap.exists?snap.data():null;
+}
+function ofV9SetBankHeaderButtons(status,approved){
+  const disconnect=document.getElementById('disconnectDeasFinanceBtn');
+  const requestData=document.getElementById('requestDeasFinanceDataCard');
+  disconnect?.classList.toggle('hidden', !(approved||['connection_pending','data_pending'].includes(status)) );
+  requestData?.classList.toggle('hidden', !(approved&&['connection_approved','data_approved','data_denied'].includes(status)) );
+}
+function ofV9PatchBankTexts(){
+  document.querySelectorAll('h3,span,p,strong').forEach(el=>{ if(el.textContent && el.textContent.trim()==='Saldo Real') el.textContent='Saldo Disponível'; });
+}
+const ofV9OldRenderDashboard = renderDashboard;
+renderDashboard = function(user){
+  ofV9OldRenderDashboard(user);
+  ofV9PatchBankTexts();
+  const bal=document.getElementById('currentBalanceAmount'); if(bal) bal.textContent=formatOpenFinanceMoney(Number(user?.saldo||0));
+  const ofBal=document.getElementById('ofAvailableBalanceBank'); if(ofBal) ofBal.textContent=formatOpenFinanceMoney(Number(user?.saldo||0));
+};
+const ofV9OldRenderDeasFinanceImportedData = renderDeasFinanceImportedData;
+renderDeasFinanceImportedData = function(local={}){
+  ofV9OldRenderDeasFinanceImportedData(local);
+  const status=String(local.connectionStatus||local.sharedPayload?.connectionStatus||local.sharedPayload?.status||'');
+  const approved=local.connectionApproved===true || ['connection_approved','data_pending','data_approved','data_denied'].includes(status);
+  ofV9SetBankHeaderButtons(status,approved);
+  const score=ofV9BankPartnerScore(local);
+  const scoreEl=document.getElementById('ofExternalScoreBank'); if(scoreEl&&score) scoreEl.textContent=String(score);
+  const card=document.querySelector('.of-status-card');
+  if(card){
+    let box=document.getElementById('ofBankConnectionMetrics');
+    if(!box){box=document.createElement('div');box.id='ofBankConnectionMetrics';box.className='of-connection-metrics';card.appendChild(box);}
+    const statusLabel=openFinanceStatusLabel(status||'connection_pending');
+    box.innerHTML=`<div><small>Status da conexão</small><strong>${statusLabel}</strong></div><div><small>Score compartilhado</small><strong>${score||'-'}</strong></div><div><small>Mesma pessoa</small><strong>Sim, vínculo mútuo</strong></div>`;
+  }
+  const grid=document.querySelector('#openFinanceSection .of-professional-grid');
+  if(grid){grid.classList.toggle('of-with-balance', approved);}
+};
+const ofV9OldLoadOpenFinanceRequests = loadOpenFinanceRequests;
+loadOpenFinanceRequests = async function(){
+  await ofV9OldLoadOpenFinanceRequests();
+  try{ const local=await ofV9GetBankConnection(); if(local) renderDeasFinanceImportedData(local); else {ofV9SetBankHeaderButtons('',false); const grid=document.querySelector('#openFinanceSection .of-professional-grid'); grid?.classList.remove('of-with-balance');} }catch(e){console.warn('v9 bank connection state failed',e)}
+  ofV9PatchBankTexts();
+};
