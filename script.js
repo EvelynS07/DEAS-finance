@@ -2061,3 +2061,264 @@ requestDeasFinanceData = async function() {
         console.error(error);
     }
 };
+
+
+/* ===================== V19 - LAYOUT, SCORE DINAMICO, HISTORICO E PAGAMENTO ===================== */
+function v19ClampScoreBank(value) {
+    return Math.max(0, Math.min(1000, Math.round(Number(value || 0))));
+}
+
+function v19BankDebtTotal(user = {}) {
+    return (user.dividas || []).reduce((total, item) => total + Number(item.valor || 0), 0);
+}
+
+function v19BankScoreBase(user = {}) {
+    return Number(user.openFinanceScoreBase || user.openFinanceMutualScore || user.scoreOriginal || user.score || 500);
+}
+
+function v19BankDynamicScore(user = {}) {
+    const base = v19BankScoreBase(user);
+    const debt = v19BankDebtTotal(user);
+    const balance = Number(user.saldo || 0);
+    const income = Number(user.renda || user.salario || user.estimatedIncome || 3200);
+    const debtCount = (user.dividas || []).length;
+    const debtRatio = debt / Math.max(1000, income || 3200);
+    let next = base;
+
+    if (debtCount > 0) {
+        next -= debtCount * 18;
+    }
+
+    if (debtRatio >= 2) {
+        next -= 120;
+    } else if (debtRatio >= 1.2) {
+        next -= 80;
+    } else if (debtRatio >= 0.65) {
+        next -= 45;
+    } else if (debt > 0) {
+        next -= 18;
+    } else {
+        next += 18;
+    }
+
+    if (balance >= income && income > 0) {
+        next += 25;
+    } else if (balance >= income * 0.5 && income > 0) {
+        next += 12;
+    } else if (balance < 0) {
+        next -= 30;
+    }
+
+    return v19ClampScoreBank(next);
+}
+
+calculateWeightedScore = function(user = {}) {
+    return v19BankDynamicScore(user);
+};
+
+function v19RecalculateAndStoreBankScore(user = {}) {
+    if (!user.openFinanceScoreBase) {
+        user.openFinanceScoreBase = Number(user.openFinanceMutualScore || user.scoreOriginal || user.score || 500);
+    }
+
+    user.score = v19BankDynamicScore(user);
+    user.lastScoreUpdatedAt = new Date().toISOString();
+    return user;
+}
+
+async function v19PersistAndRenderBank(user = {}) {
+    v19RecalculateAndStoreBankScore(user);
+    ClientRegistry.insert(currentUserId, user);
+    renderDashboard(user);
+    await persistCurrentUser();
+}
+
+payDebt = async function(index) {
+    const user = ClientRegistry.get(currentUserId);
+
+    if (!user || !Array.isArray(user.dividas) || !user.dividas[index]) {
+        alert("Dívida não encontrada.");
+        return;
+    }
+
+    const divida = user.dividas[index];
+    const valor = Number(divida.valor || 0);
+    const saldoDisponivel = Number(user.saldo || 0);
+    const limiteDisponivel = Number(user.limite || 0);
+    const totalDisponivel = saldoDisponivel + limiteDisponivel;
+
+    if (totalDisponivel < valor) {
+        alert(`Saldo insuficiente. Você tem ${formatOpenFinanceMoney(totalDisponivel)} somando saldo disponível e limite.`);
+        return;
+    }
+
+    const usaSaldo = Math.min(saldoDisponivel, valor);
+    const usaLimite = Math.max(0, valor - usaSaldo);
+    const mensagem = usaLimite > 0
+        ? `Confirmar pagamento de ${formatOpenFinanceMoney(valor)}?\n\nSerá usado ${formatOpenFinanceMoney(usaSaldo)} do saldo disponível e ${formatOpenFinanceMoney(usaLimite)} do limite.`
+        : `Confirmar pagamento de ${formatOpenFinanceMoney(valor)} usando seu saldo disponível?`;
+
+    if (!confirm(mensagem)) {
+        return;
+    }
+
+    user.saldo = saldoDisponivel - usaSaldo;
+    user.limite = limiteDisponivel - usaLimite;
+    user.dividas.splice(index, 1);
+
+    await v19PersistAndRenderBank(user);
+
+    alert("Dívida paga. Seu score foi recalculado com a dívida removida.");
+};
+
+takeLoan = async function() {
+    const user = ClientRegistry.get(currentUserId);
+
+    if (!user) {
+        alert("Usuário não encontrado.");
+        return;
+    }
+
+    v19RecalculateAndStoreBankScore(user);
+
+    const limiteMaximo = 5000;
+    const totalContratado = (user.dividas || [])
+        .filter(item => item.empresa === "DEASBank")
+        .reduce((total, item) => total + Number(item.valor || 0), 0);
+
+    if (user.score < 450) {
+        alert("Empréstimo negado: risco de crédito elevado para o perfil atual.");
+        return;
+    }
+
+    if (totalContratado + 1000 > limiteMaximo) {
+        alert("Você atingiu o limite máximo de contratos com o banco.");
+        return;
+    }
+
+    const dataVenc = new Date();
+    dataVenc.setDate(dataVenc.getDate() + 30);
+
+    user.dividas.push({
+        empresa: "DEASBank",
+        vencimento: dataVenc.toISOString().split("T")[0],
+        valor: 1000.00
+    });
+
+    user.saldo = Number(user.saldo || 0) + 1000;
+    await v19PersistAndRenderBank(user);
+
+    alert("Empréstimo liberado. O saldo aumentou, a dívida entrou no histórico e o score foi recalculado.");
+};
+
+requestLimitIncrease = async function() {
+    const user = ClientRegistry.get(currentUserId);
+
+    if (!user) {
+        alert("Usuário não encontrado.");
+        return;
+    }
+
+    v19RecalculateAndStoreBankScore(user);
+
+    const totalDividas = v19BankDebtTotal(user);
+
+    if (totalDividas > (Number(user.limite || 0) * 0.35)) {
+        alert("Aumento negado: comprometimento financeiro muito alto.");
+        await v19PersistAndRenderBank(user);
+        return;
+    }
+
+    if (user.score >= 760) {
+        user.limite = Number(user.limite || 0) + 1000;
+        alert("Aumento de R$ 1.000,00 aprovado.");
+    } else if (user.score >= 580) {
+        user.limite = Number(user.limite || 0) + 300;
+        alert("Aumento parcial de R$ 300,00 aprovado.");
+    } else {
+        alert("Aumento negado por score baixo.");
+    }
+
+    await v19PersistAndRenderBank(user);
+};
+
+clearOpenFinanceHistoryBank = async function() {
+    if (!deasBankDb) {
+        return alert("Firebase não iniciou.");
+    }
+
+    let ids = [];
+
+    try {
+        const snap = await deasBankDb.collection("openFinanceRequests").get();
+
+        snap.forEach(docSnap => {
+            const item = docSnap.data() || {};
+            const belongsToUser = item.userId === currentUserId
+                || item.targetUserId === currentUserId
+                || item.bankUserId === currentUserId
+                || item.sourceUserId === currentUserId
+                || String(item.sourceBank || "").toLowerCase().includes("deas")
+                || String(item.partnerBank || "").toLowerCase().includes("deas");
+
+            if (belongsToUser) {
+                ids.push(docSnap.id);
+            }
+        });
+
+        for (const id of ids) {
+            try {
+                await deasBankDb.collection("openFinanceRequests").doc(id).set({
+                    hiddenForUsers: firebase.firestore.FieldValue.arrayUnion(currentUserId),
+                    hiddenAt: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+            } catch (error) {
+                console.warn("Histórico ocultado apenas neste navegador:", error.message);
+            }
+        }
+    } catch (error) {
+        console.warn("Não foi possível limpar na nuvem. Limpando visualmente neste navegador:", error.message);
+    }
+
+    ofSetHiddenBank(ids);
+
+    const box = document.getElementById("openFinanceCards");
+
+    if (box) {
+        box.innerHTML = '<div class="of-empty-state">Histórico limpo. Novas solicitações aparecerão aqui quando forem criadas.</div>';
+    }
+
+    alert(ids.length ? `${ids.length} item(ns) removido(s) da tela do Open Finance.` : "Histórico limpo neste navegador.");
+    loadOpenFinanceRequests();
+};
+
+const v19PreviousRenderDashboard = renderDashboard;
+renderDashboard = function(user) {
+    if (user) {
+        v19RecalculateAndStoreBankScore(user);
+    }
+
+    v19PreviousRenderDashboard(user);
+
+    const valueIds = ["currentBalanceAmount", "totalDebtAmount", "loanLimit", "availableCredit", "totalTakenLoans"];
+
+    valueIds.forEach(id => {
+        const element = document.getElementById(id);
+
+        if (element) {
+            element.classList.add("bank-money-value");
+        }
+    });
+};
+
+(function v19InstallDashboardClasses() {
+    const summary = document.querySelector("#mainDashboard .summary-grid");
+
+    if (summary) {
+        summary.classList.add("bank-main-summary");
+    }
+
+    document.querySelectorAll("#mainDashboard .bank-main-summary .dash-card h2").forEach(element => {
+        element.classList.add("bank-money-value");
+    });
+})();

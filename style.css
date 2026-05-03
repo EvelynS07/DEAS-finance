@@ -1452,3 +1452,123 @@ body {
     background: linear-gradient(135deg, #e65100, #ff9800);
     color: #ffffff;
 }
+
+
+/* ===================== V19 - LAYOUT FINAL DO DEASBANK ===================== */
+#mainDashboard .bank-main-summary {
+    display: grid !important;
+    grid-template-columns: minmax(210px, 1.05fr) repeat(3, minmax(155px, 1fr)) !important;
+    gap: 18px !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    margin-bottom: 28px !important;
+}
+
+#mainDashboard .bank-main-summary .dash-card {
+    min-width: 0 !important;
+    min-height: 215px !important;
+    border-radius: 24px !important;
+    border: 1px solid rgba(230, 81, 0, 0.12) !important;
+    box-shadow: 0 18px 36px rgba(33, 18, 11, 0.08) !important;
+    overflow: hidden !important;
+}
+
+#mainDashboard .bank-main-summary .dash-card:not(.score-dashboard-card) {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+}
+
+#mainDashboard .bank-main-summary .dash-card h3 {
+    min-height: 38px !important;
+    margin-bottom: 10px !important;
+    line-height: 1.1 !important;
+}
+
+#mainDashboard .bank-main-summary .dash-card h2,
+#mainDashboard .bank-money-value {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: clip !important;
+    font-size: clamp(20px, 2.15vw, 28px) !important;
+    line-height: 1.12 !important;
+    letter-spacing: -0.04em !important;
+    font-variant-numeric: tabular-nums !important;
+    user-select: text !important;
+}
+
+#mainDashboard .bank-main-summary .dash-card p {
+    margin-top: 12px !important;
+    font-size: 12px !important;
+    line-height: 1.35 !important;
+}
+
+#mainDashboard .bank-main-summary .btn-action {
+    width: 100% !important;
+    min-height: 34px !important;
+    margin-top: 14px !important;
+    padding: 9px 12px !important;
+    border-radius: 8px !important;
+    white-space: nowrap !important;
+}
+
+#mainDashboard .score-container {
+    width: min(150px, 80%) !important;
+    margin: 12px auto !important;
+}
+
+.of-status,
+.status,
+.status-badge {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    max-width: 100% !important;
+    min-height: 30px !important;
+    padding: 7px 12px !important;
+    border-radius: 999px !important;
+    white-space: nowrap !important;
+    line-height: 1 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+.of-mini-grid > div,
+.of-pro-data-grid > div,
+.of-connected-summary > div,
+.of-connection-body .of-metric {
+    min-width: 0 !important;
+    overflow: hidden !important;
+}
+
+.of-mini-grid strong,
+.of-pro-data-grid strong,
+.of-connected-summary strong,
+.of-connection-body .of-metric strong {
+    display: block !important;
+    width: 100% !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    font-variant-numeric: tabular-nums !important;
+}
+
+@media (max-width: 1180px) {
+    #mainDashboard .bank-main-summary {
+        grid-template-columns: repeat(2, minmax(240px, 1fr)) !important;
+    }
+}
+
+@media (max-width: 720px) {
+    #mainDashboard .bank-main-summary {
+        grid-template-columns: 1fr !important;
+    }
+
+    #mainDashboard .bank-main-summary .dash-card h2,
+    #mainDashboard .bank-money-value {
+        font-size: 24px !important;
+    }
+}
