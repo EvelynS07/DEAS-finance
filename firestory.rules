@@ -3,8 +3,18 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      match /openFinanceConnections/{connectionId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
     match /openFinanceRequests/{requestId} {
-      allow create: if request.resource.data.sourceBank == "Deas Finance";
+      // Demo Open Finance entre Deas Finance e DeasBank.
+      // Permite que os dois apps criem pedidos e que o banco parceiro aceite/recuse.
+      allow create: if request.resource.data.sourceBank in ["Deas Finance", "DeasBank"];
       allow read, update: if true;
       allow delete: if false;
     }

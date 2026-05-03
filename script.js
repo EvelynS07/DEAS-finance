@@ -2,6 +2,17 @@
 // Cadastro: nome, e-mail e senha.
 // Login: e-mail e senha.
 // CPF removido para evitar conflito.
+
+const deasFinanceConfig = {
+    apiKey: "AIzaSyCCfx1qpBgVkIyOfIX05QqMFmsY_7L7q-M",
+    authDomain: "deas-finance.firebaseapp.com",
+    projectId: "deas-finance",
+    storageBucket: "deas-finance.firebasestorage.app",
+    messagingSenderId: "386259692909",
+    appId: "1:386259692909:web:2e5f35df5effde647b3e64",
+    measurementId: "G-7TPPZ8RKW1"
+};
+
 const firebaseConfig = {
     apiKey: "AIzaSyDHJNJzWu-_L4cWJ4jtPYKRrPu4gkdXjno",
     authDomain: "deasbank.firebaseapp.com",
@@ -14,6 +25,7 @@ const firebaseConfig = {
 
 let deasBankDb = null;
 let deasBankAuth = null;
+let deasFinanceDb = null;
 
 try {
     if (!firebase.apps.length) {
@@ -22,6 +34,9 @@ try {
 
     deasBankDb = firebase.firestore();
     deasBankAuth = firebase.auth();
+
+    const financeApp = firebase.apps.find(app => app.name === "deasFinancePartner") || firebase.initializeApp(deasFinanceConfig, "deasFinancePartner");
+    deasFinanceDb = financeApp.firestore();
 } catch (error) {
     console.error("Erro ao iniciar Firebase do DeasBank:", error);
 }
@@ -527,7 +542,19 @@ async function loadOpenFinanceRequests() {
 
     try {
         const snapshot = await deasBankDb.collection("openFinanceRequests").get();
-        const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let requests = snapshot.docs.map(doc => ({ id: doc.id, partnerProject: "deasbank", direction: "recebido", ...doc.data() }));
+
+        if (deasFinanceDb && currentUserId) {
+            const localConnSnap = await deasBankDb.collection("users").doc(currentUserId).collection("openFinanceConnections").doc("deasfinance").get();
+            const localConn = localConnSnap.exists ? localConnSnap.data() : null;
+            const ids = [localConn?.partnerRequestId, localConn?.dataRequestId].filter(Boolean);
+            for (const id of ids) {
+                const partnerSnap = await deasFinanceDb.collection("openFinanceRequests").doc(id).get();
+                if (partnerSnap.exists) {
+                    requests.push({ id: partnerSnap.id, partnerProject: "deasfinance", direction: "enviado", ...partnerSnap.data() });
+                }
+            }
+        }
 
         requests.sort((a, b) => String(b.createdAtText || b.createdAt || "").localeCompare(String(a.createdAtText || a.createdAt || "")));
         updateOpenFinanceCounters(requests);
@@ -539,7 +566,7 @@ async function loadOpenFinanceRequests() {
 
         container.innerHTML = requests.map(request => {
             const status = request.status || (request.requestType === "connection_request" ? "connection_pending" : "data_pending");
-            const canAnalyze = !String(status).includes("approved") && !String(status).includes("denied");
+            const canAnalyze = request.direction !== "enviado" && !String(status).includes("approved") && !String(status).includes("denied");
 
             const requested = request.requestedData || {};
             const importedSalary = request.importedSalary || requested.importedSalary || 0;
@@ -553,7 +580,7 @@ async function loadOpenFinanceRequests() {
                 <article class="of-request-card">
                     <div class="of-request-top">
                         <div>
-                            <span class="of-source">${escapeOpenFinanceText(request.sourceBank || "Deas Finance")}</span>
+                            <span class="of-source">${escapeOpenFinanceText((request.direction === "enviado" ? "Enviado para " : "Recebido de ") + (request.direction === "enviado" ? (request.partnerBank || "Deas Finance") : (request.sourceBank || "Deas Finance")))}</span>
                             <h3>${escapeOpenFinanceText(request.userName || "Cliente")}</h3>
                             <p>${escapeOpenFinanceText(request.emailMasked || "e-mail protegido")}</p>
                         </div>
@@ -587,7 +614,7 @@ async function loadOpenFinanceRequests() {
                         ${canAnalyze ? `
                             <button class="btn-action of-approve" onclick="approveOpenFinanceRequest('${request.id}', '${request.requestType || ""}')">Aceitar solicitação</button>
                             <button class="btn-action of-deny" onclick="denyOpenFinanceRequest('${request.id}', '${request.requestType || ""}')">Recusar</button>
-                        ` : `<small>${escapeOpenFinanceText(request.analysisMessage || "Solicitação analisada")}</small>`}
+                        ` : `<small>${escapeOpenFinanceText(request.direction === "enviado" ? "Aguardando/verificando resposta do parceiro" : (request.analysisMessage || "Solicitação analisada"))}</small>`}
                     </div>
                 </article>
             `;
@@ -653,4 +680,146 @@ async function denyOpenFinanceRequest(requestId, requestType = "") {
     } catch (error) {
         alert("Erro ao recusar: " + error.message);
     }
+}
+
+
+async function requestDeasFinanceConnection() {
+    if (!deasBankDb || !deasFinanceDb) return alert("Firebase não iniciou corretamente.");
+
+    const user = ClientRegistry.get(currentUserId);
+    if (!user) return alert("Entre na sua conta primeiro.");
+
+    try {
+        const payload = {
+            consentId: `deasbank_consent_${currentUserId}_${Date.now()}`,
+            sourceBank: "DeasBank",
+            partnerBank: "Deas Finance",
+            userId: currentUserId,
+            userName: user.nome || "Cliente DeasBank",
+            emailMasked: maskEmailForOpenFinance(user.email),
+            purpose: "solicitacao_conexao_open_finance",
+            requestType: "connection_request",
+            sameOwner: true,
+            status: "connection_pending",
+            direction: "incoming_to_deasfinance",
+            createdAtText: new Date().toISOString(),
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        const ref = await deasFinanceDb.collection("openFinanceRequests").add(payload);
+        await deasBankDb.collection("users").doc(currentUserId).collection("openFinanceConnections").doc("deasfinance").set({
+            institutionName: "Deas Finance",
+            partnerKey: "deasfinance",
+            connectionMode: "firebase_mutual_openfinance",
+            partnerRequestId: ref.id,
+            connectionStatus: "connection_pending",
+            sharedPayload: { ...payload, partnerRequestId: ref.id },
+            createdAtText: new Date().toISOString(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        alert("Conexão solicitada ao Deas Finance. Agora o Deas Finance pode aceitar ou recusar.");
+        loadOpenFinanceRequests();
+    } catch (error) {
+        alert("Erro ao solicitar conexão: " + error.message);
+    }
+}
+
+async function requestDeasFinanceData() {
+    if (!deasBankDb || !deasFinanceDb) return alert("Firebase não iniciou corretamente.");
+
+    const user = ClientRegistry.get(currentUserId);
+    if (!user) return alert("Entre na sua conta primeiro.");
+
+    try {
+        const localRef = deasBankDb.collection("users").doc(currentUserId).collection("openFinanceConnections").doc("deasfinance");
+        const localSnap = await localRef.get();
+        const local = localSnap.exists ? localSnap.data() : null;
+
+        if (!local || !["connection_approved", "data_approved", "data_denied"].includes(local.connectionStatus)) {
+            alert("Primeiro solicite a conexão e aguarde o Deas Finance aceitar.");
+            return;
+        }
+
+        const payload = {
+            consentId: `deasbank_data_${currentUserId}_${Date.now()}`,
+            sourceBank: "DeasBank",
+            partnerBank: "Deas Finance",
+            userId: currentUserId,
+            userName: user.nome || "Cliente DeasBank",
+            emailMasked: maskEmailForOpenFinance(user.email),
+            purpose: "solicitacao_transferencia_dados_open_finance",
+            requestType: "data_transfer_request",
+            sameOwner: true,
+            permissions: { income: true, balance: true, debts: true, creditLimit: true, loans: true },
+            status: "data_pending",
+            direction: "incoming_to_deasfinance",
+            createdAtText: new Date().toISOString(),
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        const ref = await deasFinanceDb.collection("openFinanceRequests").add(payload);
+        await localRef.set({
+            dataRequestId: ref.id,
+            connectionStatus: "data_pending",
+            sharedPayload: { ...payload, partnerRequestId: ref.id },
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        alert("Pedido de salário, saldo, dívidas, limite e empréstimos enviado ao Deas Finance.");
+        loadOpenFinanceRequests();
+    } catch (error) {
+        alert("Erro ao pedir dados: " + error.message);
+    }
+}
+
+async function syncDeasFinanceResponse() {
+    if (!deasBankDb || !deasFinanceDb) return alert("Firebase não iniciou corretamente.");
+
+    try {
+        const localRef = deasBankDb.collection("users").doc(currentUserId).collection("openFinanceConnections").doc("deasfinance");
+        const localSnap = await localRef.get();
+        if (!localSnap.exists) return alert("Nenhum pedido enviado ao Deas Finance.");
+
+        const local = localSnap.data();
+        const requestId = local.dataRequestId || local.partnerRequestId || local.sharedPayload?.partnerRequestId;
+        if (!requestId) return alert("Não encontrei o ID da solicitação.");
+
+        const partnerSnap = await deasFinanceDb.collection("openFinanceRequests").doc(requestId).get();
+        if (!partnerSnap.exists) return alert("A solicitação ainda não apareceu no Deas Finance.");
+
+        const partner = partnerSnap.data();
+        const status = partner.status || "connection_pending";
+        const update = {
+            connectionStatus: status,
+            sharedPayload: { ...(local.sharedPayload || {}), ...partner, partnerRequestId: requestId },
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        if (status === "data_approved") {
+            update.importedSalary = Number(partner.importedSalary || partner.requestedData?.importedSalary || 0);
+            update.externalBalance = Number(partner.externalBalance || partner.requestedData?.externalBalance || 0);
+            update.externalDebt = Number(partner.externalDebt || partner.requestedData?.externalDebt || 0);
+            update.externalLimit = Number(partner.externalLimit || partner.requestedData?.externalLimit || 0);
+
+            const user = ClientRegistry.get(currentUserId);
+            if (user) {
+                user.scoreOriginal = Math.min(950, Number(user.scoreOriginal || 500) + (update.importedSalary >= 3000 ? 30 : 10));
+                user.limite = Math.max(Number(user.limite || 0), update.externalLimit || 0);
+                await persistCurrentUser();
+                renderDashboard(user);
+            }
+        }
+
+        await localRef.set(update, { merge: true });
+        alert(openFinanceStatusLabel(status));
+        loadOpenFinanceRequests();
+    } catch (error) {
+        alert("Erro ao verificar resposta: " + error.message);
+    }
+}
+
+function maskEmailForOpenFinance(email) {
+    const [user, domain] = String(email || "cliente@email.com").split("@");
+    return `${user.slice(0, 3)}***@${domain || "email.com"}`;
 }
