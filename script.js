@@ -1,3 +1,8 @@
+// --- FIREBASE DO DEASBANK ---
+// Cadastro: nome, e-mail e senha.
+// Login: e-mail e senha.
+// CPF removido para evitar conflito.
+
 const deasFinanceConfig = {
     apiKey: "AIzaSyCCfx1qpBgVkIyOfIX05QqMFmsY_7L7q-M",
     authDomain: "deas-finance.firebaseapp.com",
@@ -47,8 +52,11 @@ const ClientRegistry = {
 };
 
 let currentUserId = null;
-let currentUserCpf = null; // compatibilidade com funções antigas; guarda o UID.
+let currentUserCpf = null; // compatibilidade com funções antigas; agora guarda o UID.
 let openFinanceListMode = "pending";
+function ofHiddenKeyBank(){ return "deasbank_openfinance_hidden_" + (currentUserId || "anon"); }
+function ofGetHiddenBank(){ try { return JSON.parse(localStorage.getItem(ofHiddenKeyBank()) || "[]"); } catch(_) { return []; } }
+function ofSetHiddenBank(ids){ localStorage.setItem(ofHiddenKeyBank(), JSON.stringify([...new Set([...(ofGetHiddenBank()), ...ids.filter(Boolean)])])); }
 
 function moneyBR(value) {
     return Number(value || 0).toLocaleString("pt-BR", {
@@ -143,7 +151,7 @@ async function logout() {
     location.reload();
 }
 
-// --- CADASTRO ---
+// --- CADASTRO SEM CPF ---
 document.getElementById("registerForm").addEventListener("submit", async function(e) {
     e.preventDefault();
 
@@ -606,6 +614,9 @@ async function loadOpenFinanceRequests() {
     try {
         const snapshot = await deasBankDb.collection("openFinanceRequests").get();
         let requests = snapshot.docs.map(doc => ({ id: doc.id, partnerProject: "deasbank", direction: "recebido", ...doc.data() }));
+        const hiddenLocal = ofGetHiddenBank();
+        requests = requests.filter(r => !hiddenLocal.includes(r.id));
+        requests = requests.filter(r => !(Array.isArray(r.hiddenForUsers) && currentUserId && r.hiddenForUsers.includes(currentUserId)));
 
         if (deasFinanceDb && currentUserId) {
             const localConnSnap = await deasBankDb.collection("users").doc(currentUserId).collection("openFinanceConnections").doc("deasfinance").get();
@@ -616,7 +627,8 @@ async function loadOpenFinanceRequests() {
             for (const id of ids) {
                 const partnerSnap = await deasFinanceDb.collection("openFinanceRequests").doc(id).get();
                 if (partnerSnap.exists) {
-                    requests.push({ id: partnerSnap.id, partnerProject: "deasfinance", direction: "enviado", ...partnerSnap.data() });
+                    const sentData = { id: partnerSnap.id, partnerProject: "deasfinance", direction: "enviado", ...partnerSnap.data() };
+                    if (!ofGetHiddenBank().includes(sentData.id) && !(Array.isArray(sentData.hiddenForUsers) && currentUserId && sentData.hiddenForUsers.includes(currentUserId))) requests.push(sentData);
                 }
             }
         }
@@ -966,6 +978,8 @@ function maskEmailForOpenFinance(email) {
     const [user, domain] = String(email || "cliente@email.com").split("@");
     return `${user.slice(0, 3)}***@${domain || "email.com"}`;
 }
+
+
 /* Open Finance profissional v5 - overrides seguros */
 function getBankFinancialSnapshot(afterBalance) {
     const user = ClientRegistry.get(currentUserId) || {};
@@ -1379,7 +1393,10 @@ renderDeasFinanceImportedData = function(local={}){
     let box=document.getElementById('ofBankConnectionMetrics');
     if(!box){box=document.createElement('div');box.id='ofBankConnectionMetrics';box.className='of-connection-metrics';card.appendChild(box);}
     const statusLabel=openFinanceStatusLabel(status||'connection_pending');
-    box.innerHTML=`<div><small>Status da conexão</small><strong>${statusLabel}</strong></div><div><small>Score compartilhado</small><strong>${score||'-'}</strong></div><div><small>Mesma pessoa</small><strong>Sim, vínculo mútuo</strong></div>`;
+    const user=ClientRegistry.get(currentUserId)||{};
+    const localScore=Number(user.score||calculateWeightedScore(user)||user.scoreOriginal||0)||'-';
+    const impact=Number(user.lastOpenFinanceScoreImpact||local?.lastOpenFinanceScoreImpact||0);
+    box.innerHTML=`<div><small>Status</small><strong>${statusLabel}</strong></div><div><small>Score recebido</small><strong>${score||'-'}</strong></div><div><small>Score DeasBank após impacto</small><strong>${localScore}${impact?` (${impact>0?'+':''}${impact})`:''}</strong></div><div><small>Mesma pessoa</small><strong>Sim, vínculo mútuo</strong></div>`;
   }
   const grid=document.querySelector('#openFinanceSection .of-professional-grid');
   if(grid){grid.classList.toggle('of-with-balance', approved);}
@@ -1409,26 +1426,38 @@ function ofProScoreImpactBank(localScore, partnerScore, partnerDebt=0, partnerIn
     return ofProClampScoreBank(localScore + scoreDelta + debtPenalty + incomeBonus);
 }
 function ofProInstallClearButtonBank(){
-    const tools=document.querySelector('#openFinanceSection .of-list-tools');
-    if(!tools || document.getElementById('clearOpenFinanceHistoryBankBtn')) return;
+    const tools=document.querySelector('#openFinanceSection .of-list-tools') || document.querySelector('#openFinanceSection .of-filter-tabs') || document.querySelector('#openFinanceSection .section-actions');
+    if(!tools) return;
+    const existing=document.getElementById('clearOpenFinanceHistoryBankBtn');
+    if(existing){ existing.onclick=clearOpenFinanceHistoryBank; return; }
     const btn=document.createElement('button');
-    btn.id='clearOpenFinanceHistoryBankBtn'; btn.className='of-filter'; btn.type='button'; btn.textContent='Limpar histórico';
+    btn.id='clearOpenFinanceHistoryBankBtn'; btn.className='of-filter btn-action'; btn.type='button'; btn.textContent='Limpar histórico';
     btn.onclick=clearOpenFinanceHistoryBank;
     tools.appendChild(btn);
 }
 async function clearOpenFinanceHistoryBank(){
     if(!deasBankDb) return alert('Firebase não iniciou.');
+    const hidden=ofGetHiddenBank();
+    let removable=[];
     try{
         const snap=await deasBankDb.collection('openFinanceRequests').get();
-        const removable=[];
         snap.forEach(docSnap=>{
             const r=docSnap.data()||{}; const st=String(r.status||'');
-            if(['connection_denied','data_denied','consent_revoked','data_approved'].includes(st)) removable.push(docSnap.ref);
+            const mine = r.userId===currentUserId || r.targetUserId===currentUserId || r.bankUserId===currentUserId || r.direction==='enviado' || String(r.emailMasked||'').length>0;
+            const alreadyHidden = hidden.includes(docSnap.id) || (Array.isArray(r.hiddenForUsers) && r.hiddenForUsers.includes(currentUserId));
+            if(mine && !alreadyHidden && ['connection_denied','data_denied','consent_revoked','data_approved','connection_approved'].includes(st)) removable.push(docSnap);
         });
-        for(const ref of removable){ await ref.delete(); }
-        alert(removable.length ? `${removable.length} item(ns) removido(s) do histórico Open Finance.` : 'Não havia histórico finalizado para limpar.');
-        loadOpenFinanceRequests();
-    }catch(error){ alert('Erro ao limpar histórico: '+error.message); }
+    }catch(e){
+        console.warn('Não deu para buscar histórico na nuvem. Limpando visualmente neste navegador.', e.message);
+    }
+    const ids=removable.map(d=>d.id);
+    for(const docSnap of removable){
+        try{ await docSnap.ref.set({hiddenForUsers: firebase.firestore.FieldValue.arrayUnion(currentUserId), hiddenAt: firebase.firestore.FieldValue.serverTimestamp()},{merge:true}); }
+        catch(e){ console.warn('Histórico ocultado apenas neste navegador por falta de permissão:', e.message); }
+    }
+    ofSetHiddenBank(ids);
+    alert(ids.length ? `${ids.length} item(ns) removido(s) do histórico. A conexão ativa não foi revogada.` : 'Não havia histórico finalizado para limpar.');
+    loadOpenFinanceRequests();
 }
 async function ofProMirrorBankConnection(request,status,extra={}){
     const approved=['connection_approved','data_pending','data_approved','data_denied'].includes(status);
