@@ -788,7 +788,7 @@ body {
     display:none!important;
 }
 @media(max-width:980px){.of-clean-steps-bank{grid-template-columns:1fr}}
-/* ===================== DEASBANK V8 - visual profissional ===================== */
+
 .dashboard-wrapper{
     background:linear-gradient(135deg,#2a1308 0%,#f47b20 42%,#ffd596 100%);
 }
@@ -828,8 +828,6 @@ body {
 .of-big-money{color:#1f8c42;}
 @media(max-width:900px){.dashboard-wrapper{display:block}.sidebar{width:100%;height:auto}.main-content{padding:22px}.summary-grid{grid-template-columns:1fr}.of-hero-actions{width:100%}}
 
-
-/* ===================== DEASBANK V9 - DASHBOARD SEM PARTES FLUTUANTES ===================== */
 .dashboard-wrapper{
     min-height:100vh;
     height:auto;
