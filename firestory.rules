@@ -1,0 +1,16 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /openFinanceRequests/{requestId} {
+      allow create: if request.resource.data.sourceBank == "Deas Finance";
+      allow read, update: if true;
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
