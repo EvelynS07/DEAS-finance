@@ -1572,3 +1572,73 @@ body {
         font-size: 24px !important;
     }
 }
+
+
+/* ===================== V20 - ACABAMENTO DASHBOARD DEASBANK ===================== */
+.bank-money-value,
+#currentBalanceAmount,
+#totalDebtAmount,
+#loanLimit,
+#availableCredit,
+#totalTakenLoans {
+    display: block;
+    width: 100%;
+    white-space: nowrap;
+    word-break: keep-all;
+    overflow-wrap: normal;
+    line-height: 1.15;
+    font-size: clamp(24px, 2.1vw, 34px);
+    letter-spacing: -0.04em;
+}
+
+#mainDashboard .summary-grid,
+.bank-main-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(170px, 1fr));
+    gap: 22px;
+    align-items: stretch;
+}
+
+#mainDashboard .summary-grid .dash-card {
+    min-width: 0;
+    overflow: hidden;
+}
+
+#mainDashboard .summary-grid .dash-card h2 {
+    max-width: 100%;
+}
+
+.status,
+.of-status,
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: fit-content;
+    max-width: 100%;
+    white-space: nowrap;
+    line-height: 1;
+}
+
+@media (max-width: 1180px) {
+    #mainDashboard .summary-grid,
+    .bank-main-summary {
+        grid-template-columns: repeat(2, minmax(190px, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    #mainDashboard .summary-grid,
+    .bank-main-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .bank-money-value,
+    #currentBalanceAmount,
+    #totalDebtAmount,
+    #loanLimit,
+    #availableCredit,
+    #totalTakenLoans {
+        font-size: 26px;
+    }
+}

@@ -2322,3 +2322,517 @@ renderDashboard = function(user) {
         element.classList.add("bank-money-value");
     });
 })();
+
+
+/* ===================== V20 - MOTOR COESO OPEN FINANCE E SCORE DINAMICO ===================== */
+function v20MoneyNumberBank(value) {
+    return Number(value || 0);
+}
+
+function v20ClampBankScore(value) {
+    return Math.max(0, Math.min(1000, Math.round(Number(value || 0))));
+}
+
+function v20BankDebtTotal(user = {}) {
+    return (user.dividas || []).reduce((sum, debt) => sum + Number(debt.valor || 0), 0);
+}
+
+function v20BankIncome(user = {}) {
+    return Number(user.renda || user.salario || user.estimatedIncome || 3200);
+}
+
+function v20BankSnapshot(user = {}) {
+    const score = Number(user.score || user.scoreOriginal || user.openFinanceScoreBase || 500);
+    const debt = v20BankDebtTotal(user);
+    return {
+        externalBalance: Number(user.saldo || 0),
+        externalDebt: debt,
+        externalLimit: Number(user.limite || 0),
+        loansTotal: debt,
+        investmentsTotal: Number(user.investimentos || 0),
+        estimatedIncome: v20BankIncome(user),
+        creditScore: score,
+        externalScore: score,
+        sharedScore: score,
+        updatedAtText: new Date().toISOString()
+    };
+}
+
+function v20PartnerSnapshotBank(data = {}) {
+    const d = data.requestedData || {};
+    return {
+        externalBalance: Number(data.externalBalance || d.externalBalance || 0),
+        externalDebt: Number(data.externalDebt || d.externalDebt || 0),
+        externalLimit: Number(data.externalLimit || d.externalLimit || 0),
+        loansTotal: Number(data.loansTotal || d.loansTotal || data.externalLoans || 0),
+        investmentsTotal: Number(data.investmentsTotal || d.investmentsTotal || 0),
+        estimatedIncome: Number(data.estimatedIncome || d.estimatedIncome || data.importedSalary || d.importedSalary || data.transferAmount || 0),
+        creditScore: Number(data.creditScore || data.externalScore || data.sharedScore || data.mutualScore || d.creditScore || 0)
+    };
+}
+
+function v20UnifiedBankScore(local = {}, partner = {}) {
+    const localScore = Number(local.creditScore || 500);
+    const partnerScore = Number(partner.creditScore || 0);
+    let next = partnerScore > 0 ? Math.round((localScore + partnerScore) / 2) : localScore;
+    const totalDebt = Number(local.externalDebt || 0) + Number(partner.externalDebt || 0);
+    const totalIncome = Number(local.estimatedIncome || 0) + Number(partner.estimatedIncome || 0);
+    const totalBalance = Number(local.externalBalance || 0) + Number(partner.externalBalance || 0);
+    const debtRatio = totalDebt / Math.max(1000, totalIncome || 3000);
+
+    if (debtRatio >= 1.8) {
+        next -= 115;
+    } else if (debtRatio >= 1.1) {
+        next -= 75;
+    } else if (debtRatio >= 0.65) {
+        next -= 40;
+    } else if (totalDebt > 0) {
+        next -= 14;
+    } else {
+        next += 14;
+    }
+
+    if (totalIncome >= 12000) {
+        next += 42;
+    } else if (totalIncome >= 8000) {
+        next += 28;
+    } else if (totalIncome >= 4500) {
+        next += 16;
+    } else if (totalIncome > 0 && totalIncome < 2500) {
+        next -= 18;
+    }
+
+    if (totalBalance >= Math.max(1500, totalIncome * 0.5)) {
+        next += 18;
+    } else if (totalBalance < 0) {
+        next -= 28;
+    }
+
+    return v20ClampBankScore(next);
+}
+
+function calculateWeightedScore(user = {}) {
+    const base = Number(user.openFinanceScoreBase || user.scoreOriginal || user.openFinanceMutualScore || 500);
+    const debt = v20BankDebtTotal(user);
+    const income = v20BankIncome(user);
+    const balance = Number(user.saldo || 0);
+    const limit = Number(user.limite || 0);
+    const debtCount = (user.dividas || []).length;
+    const debtRatio = debt / Math.max(1000, income || 3200);
+    let next = base;
+
+    next -= debtCount * 18;
+
+    if (debtRatio >= 1.8) {
+        next -= 130;
+    } else if (debtRatio >= 1.1) {
+        next -= 90;
+    } else if (debtRatio >= 0.65) {
+        next -= 52;
+    } else if (debt > 0) {
+        next -= 20;
+    } else {
+        next += 24;
+    }
+
+    if (balance >= income && income > 0) {
+        next += 32;
+    } else if (balance >= income * 0.45 && income > 0) {
+        next += 14;
+    } else if (balance < 100) {
+        next -= 18;
+    }
+
+    if (limit < 500) {
+        next -= 10;
+    }
+
+    return v20ClampBankScore(next);
+}
+
+async function v20BroadcastBankSnapshot(reason = "atualizacao_deasbank") {
+    if (!deasBankDb || !currentUserId) {
+        return;
+    }
+
+    const user = ClientRegistry.get(currentUserId) || await loadUserFromFirestore(currentUserId) || {};
+    const snapshot = v20BankSnapshot(user);
+
+    try {
+        const localRef = deasBankDb.collection("users").doc(currentUserId).collection("openFinanceConnections").doc("deasfinance");
+        await localRef.set({
+            latestLocalSnapshot: snapshot,
+            latestScore: snapshot.creditScore,
+            latestScoreReason: reason,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+    } catch (error) {
+        console.warn("Não foi possível atualizar o espelho local do Open Finance:", error.message);
+    }
+
+    try {
+        const requests = await deasBankDb.collection("openFinanceRequests").get();
+        const writes = [];
+        requests.forEach(docSnap => {
+            const r = docSnap.data() || {};
+            const belongs = r.userId === currentUserId
+                || r.bankUserId === currentUserId
+                || String(r.sourceBank || "").toLowerCase() === "deasbank"
+                || String(r.partnerBank || "").toLowerCase().includes("deas");
+            if (belongs) {
+                writes.push(deasBankDb.collection("openFinanceRequests").doc(docSnap.id).set({
+                    latestSourceSnapshot: snapshot,
+                    latestScore: snapshot.creditScore,
+                    scoreRefreshReason: reason,
+                    scoreRefreshAt: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true }));
+            }
+        });
+        await Promise.allSettled(writes);
+    } catch (error) {
+        console.warn("Broadcast de score do DeasBank não concluído:", error.message);
+    }
+}
+
+async function v20PersistBank(user, reason = "atualizacao") {
+    user.score = calculateWeightedScore(user);
+    user.scoreOriginal = Number(user.openFinanceScoreBase || user.scoreOriginal || user.score || 500);
+    ClientRegistry.insert(currentUserId, user);
+    await persistCurrentUser();
+    await v20BroadcastBankSnapshot(reason);
+    renderDashboard(user);
+    return user;
+}
+
+async function payDebt(index) {
+    const user = ClientRegistry.get(currentUserId);
+    const debt = user?.dividas?.[index];
+
+    if (!user || !debt) {
+        alert("Dívida não encontrada.");
+        return;
+    }
+
+    const debtValue = Number(debt.valor || 0);
+    const availableBalance = Number(user.saldo || 0);
+    const availableLimit = Number(user.limite || 0);
+    const fromBalance = Math.min(availableBalance, debtValue);
+    const remaining = debtValue - fromBalance;
+    const fromLimit = Math.min(availableLimit, remaining);
+
+    if (fromBalance + fromLimit < debtValue) {
+        alert(`Saldo e limite insuficientes. Necessário: ${formatOpenFinanceMoney(debtValue)}. Disponível: ${formatOpenFinanceMoney(availableBalance + availableLimit)}.`);
+        return;
+    }
+
+    if (!confirm(`Pagar ${formatOpenFinanceMoney(debtValue)}?\n\nSerá usado primeiro o saldo disponível (${formatOpenFinanceMoney(fromBalance)}) e, se necessário, o limite (${formatOpenFinanceMoney(fromLimit)}).`)) {
+        return;
+    }
+
+    user.saldo = availableBalance - fromBalance;
+    user.limite = availableLimit - fromLimit;
+    user.dividas.splice(index, 1);
+
+    await v20PersistBank(user, "pagamento_divida_deasbank");
+    alert("Dívida paga. Score recalculado e atualização enviada ao Open Finance.");
+}
+
+async function takeLoan() {
+    const user = ClientRegistry.get(currentUserId);
+    const totalDebt = v20BankDebtTotal(user);
+    const score = calculateWeightedScore(user);
+
+    if (score < 430) {
+        alert("Empréstimo negado: score baixo depois da análise atualizada.");
+        return;
+    }
+
+    const amount = 1000;
+    const maxDebt = 5000;
+
+    if (totalDebt + amount > maxDebt) {
+        alert("Você atingiu o limite máximo de contratos com o banco.");
+        return;
+    }
+
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 30);
+
+    user.dividas = user.dividas || [];
+    user.dividas.push({
+        empresa: "DEASBank",
+        vencimento: dueDate.toISOString().split("T")[0],
+        valor: amount
+    });
+
+    user.saldo = Number(user.saldo || 0) + amount;
+
+    await v20PersistBank(user, "emprestimo_deasbank");
+    alert("Empréstimo liberado. Score recalculado nos dados do Open Finance.");
+}
+
+async function requestLimitIncrease() {
+    const user = ClientRegistry.get(currentUserId);
+    const score = calculateWeightedScore(user);
+    const debt = v20BankDebtTotal(user);
+    const income = v20BankIncome(user);
+
+    if (debt > income * 1.2) {
+        alert("Aumento negado: dívidas altas em relação à renda.");
+        return;
+    }
+
+    if (score >= 760) {
+        user.limite = Number(user.limite || 0) + 1200;
+        alert("Aumento de R$ 1.200,00 aprovado.");
+    } else if (score >= 620) {
+        user.limite = Number(user.limite || 0) + 500;
+        alert("Aumento parcial de R$ 500,00 aprovado.");
+    } else {
+        alert("Aumento negado por score baixo.");
+        return;
+    }
+
+    await v20PersistBank(user, "aumento_limite_deasbank");
+}
+
+approveOpenFinanceRequest = async function(requestId, requestType = "") {
+    if (!deasBankDb) {
+        return alert("Firebase não iniciou.");
+    }
+
+    try {
+        const requestRef = deasBankDb.collection("openFinanceRequests").doc(requestId);
+        const snap = await requestRef.get();
+
+        if (!snap.exists) {
+            return alert("Pedido não encontrado.");
+        }
+
+        const request = { id: requestId, ...snap.data() };
+        const type = requestType || request.requestType || "connection_request";
+        const currentStatus = request.status || (type === "data_transfer_request" ? "data_pending" : "connection_pending");
+
+        if (currentStatus === "data_approved" || currentStatus === "connection_approved") {
+            return alert("Esse pedido já foi aprovado.");
+        }
+
+        const user = ClientRegistry.get(currentUserId) || await loadUserFromFirestore(currentUserId) || {};
+        const localSnapshot = v20BankSnapshot(user);
+        const partnerSnapshot = v20PartnerSnapshotBank(request);
+        const mutualScore = v20UnifiedBankScore(localSnapshot, partnerSnapshot);
+        const nextStatus = type === "data_transfer_request" ? "data_approved" : "connection_approved";
+        const payload = {
+            status: nextStatus,
+            connectionStatus: nextStatus,
+            connectionApproved: true,
+            sameOwner: true,
+            mutualScore,
+            sharedScore: mutualScore,
+            creditScore: mutualScore,
+            externalScore: mutualScore,
+            ...localSnapshot,
+            analysisMessage: type === "data_transfer_request"
+                ? "DeasBank aprovou o envio de salário/dados. O destino deve sincronizar para receber o dinheiro."
+                : "DeasBank aprovou a conexão. Score e dados básicos foram considerados.",
+            analyzedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        if (type === "data_transfer_request") {
+            const requestedAmount = Number(request.requestedData?.requestedSalaryAmount || request.requestedData?.importedSalary || request.importedSalary || request.transferAmount || 0);
+
+            if (requestedAmount > Number(user.saldo || 0)) {
+                return alert(`Saldo disponível insuficiente no DeasBank para transferir ${formatOpenFinanceMoney(requestedAmount)}. Disponível: ${formatOpenFinanceMoney(user.saldo || 0)}.`);
+            }
+
+            const moveId = request.moneyMoveId || `move_${requestId}`;
+            user.saldo = Number(user.saldo || 0) - requestedAmount;
+            await v20PersistBank(user, "salario_enviado_ao_deasfinance");
+
+            const updatedSnapshot = v20BankSnapshot(ClientRegistry.get(currentUserId) || user);
+            Object.assign(payload, {
+                ...updatedSnapshot,
+                importedSalary: requestedAmount,
+                transferAmount: requestedAmount,
+                moneyMoved: requestedAmount > 0,
+                moneyMoveId: moveId,
+                sourceDebited: true,
+                transferSourceBank: "DeasBank",
+                transferDestinationBank: request.sourceBank || "Deas Finance",
+                relationshipSummary: `DeasBank enviou ${formatOpenFinanceMoney(requestedAmount)} para o Deas Finance. Saldo atual ${formatOpenFinanceMoney(updatedSnapshot.externalBalance)}, dívidas ${formatOpenFinanceMoney(updatedSnapshot.externalDebt)} e score ${updatedSnapshot.creditScore}.`
+            });
+            payload.requestedData = {
+                importedSalary: requestedAmount,
+                requestedSalaryAmount: requestedAmount,
+                externalBalance: updatedSnapshot.externalBalance,
+                externalDebt: updatedSnapshot.externalDebt,
+                externalLimit: updatedSnapshot.externalLimit,
+                loansTotal: updatedSnapshot.loansTotal,
+                investmentsTotal: updatedSnapshot.investmentsTotal,
+                estimatedIncome: updatedSnapshot.estimatedIncome,
+                creditScore: updatedSnapshot.creditScore,
+                relationshipSummary: payload.relationshipSummary
+            };
+        } else {
+            user.openFinanceScoreBase = mutualScore;
+            await v20PersistBank(user, "conexao_openfinance_aprovada_deasbank");
+            payload.relationshipSummary = `Conexão mútua ativa. Score unificado ${mutualScore}. Saldo ${formatOpenFinanceMoney(localSnapshot.externalBalance)}, renda ${formatOpenFinanceMoney(localSnapshot.estimatedIncome)} e dívidas ${formatOpenFinanceMoney(localSnapshot.externalDebt)}.`;
+        }
+
+        await requestRef.set(payload, { merge: true });
+        await ofProMirrorBankConnection(request, nextStatus, payload);
+        updateMutualDataVisibility(nextStatus, true);
+        refreshOpenFinanceMirrors();
+        loadOpenFinanceRequests();
+
+        alert(type === "data_transfer_request"
+            ? "Aprovado. Agora abra o Deas Finance e clique em Sincronizar respostas para o dinheiro entrar lá."
+            : `Conexão aprovada. Score unificado: ${mutualScore}.`);
+    } catch (error) {
+        alert("Erro ao aceitar: " + error.message);
+        console.error(error);
+    }
+};
+
+syncDeasFinanceResponse = async function() {
+    if (!deasBankDb || !deasFinanceDb) {
+        return alert("Firebase não iniciou corretamente.");
+    }
+
+    try {
+        const localRef = deasBankDb.collection("users").doc(currentUserId).collection("openFinanceConnections").doc("deasfinance");
+        const localSnap = await localRef.get();
+
+        if (!localSnap.exists) {
+            return alert("Nenhum pedido enviado ao Deas Finance.");
+        }
+
+        const local = localSnap.data() || {};
+        const requestId = ofV14PickBankRequestId(local);
+
+        if (!requestId) {
+            return alert("Não encontrei o ID da solicitação.");
+        }
+
+        const partnerSnap = await deasFinanceDb.collection("openFinanceRequests").doc(requestId).get();
+
+        if (!partnerSnap.exists) {
+            return alert("A solicitação ainda não apareceu no Deas Finance.");
+        }
+
+        const partner = { id: requestId, ...partnerSnap.data() };
+        const rawStatus = String(partner.status || "connection_pending");
+        const effectiveStatus = rawStatus === "data_denied" ? "connection_approved" : rawStatus;
+        const user = ClientRegistry.get(currentUserId) || await loadUserFromFirestore(currentUserId) || {};
+        const localSnapshotBefore = v20BankSnapshot(user);
+        const partnerSnapshot = v20PartnerSnapshotBank(partner);
+        const mutualScore = Number(partner.mutualScore || v20UnifiedBankScore(localSnapshotBefore, partnerSnapshot));
+        const update = {
+            connectionStatus: effectiveStatus,
+            connectionApproved: ["connection_approved", "data_pending", "data_approved"].includes(effectiveStatus),
+            mutualScore,
+            sharedScore: mutualScore,
+            externalScore: partnerSnapshot.creditScore,
+            externalDebt: partnerSnapshot.externalDebt,
+            externalIncome: partnerSnapshot.estimatedIncome,
+            externalBalance: partnerSnapshot.externalBalance,
+            sharedPayload: {
+                ...(local.sharedPayload || {}),
+                ...partner,
+                partnerRequestId: requestId,
+                connectionStatus: effectiveStatus
+            },
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        if (rawStatus === "data_approved") {
+            const amount = Number(partner.transferAmount || partner.importedSalary || partner.requestedData?.importedSalary || 0);
+            const moveId = String(partner.moneyMoveId || local.moneyMoveId || `move_${requestId}`);
+            const appliedMoves = user.openFinanceAppliedMoves || {};
+            const applyKey = `${moveId}_destino_deasbank`;
+
+            if (partner.moneyMoved && amount > 0 && !appliedMoves[applyKey]) {
+                user.saldo = Number(user.saldo || 0) + amount;
+                user.openFinanceAppliedMoves = {
+                    ...appliedMoves,
+                    [applyKey]: true
+                };
+                update.importedSalary = amount;
+                update.moneyMovedApplied = true;
+                update.appliedMoneyMoveId = moveId;
+            }
+        }
+
+        user.openFinanceScoreBase = mutualScore;
+        await v20PersistBank(user, rawStatus === "data_approved" ? "salario_recebido_do_deasfinance" : "sync_openfinance_deasbank");
+        await localRef.set(update, { merge: true });
+        await ofProMirrorBankConnection(partner, effectiveStatus, update);
+        renderDeasFinanceImportedData({ ...local, ...update });
+        updateMutualDataVisibility(update.connectionStatus, update.connectionApproved);
+        refreshOpenFinanceMirrors();
+        loadOpenFinanceRequests();
+
+        if (rawStatus === "data_denied") {
+            alert("O Deas Finance recusou esse pedido de salário/dados, mas a conexão continua ativa.");
+        } else if (rawStatus === "data_approved") {
+            alert(`Sincronizado. Salário recebido e score recalculado: ${calculateWeightedScore(ClientRegistry.get(currentUserId))}.`);
+        } else {
+            alert(`Sincronizado. Score recalculado: ${calculateWeightedScore(ClientRegistry.get(currentUserId))}.`);
+        }
+    } catch (error) {
+        alert("Erro ao verificar resposta: " + error.message);
+        console.error(error);
+    }
+};
+
+clearOpenFinanceHistoryBank = async function() {
+    const ids = [];
+
+    try {
+        if (deasBankDb) {
+            const snap = await deasBankDb.collection("openFinanceRequests").get();
+            snap.forEach(docSnap => ids.push(docSnap.id));
+        }
+    } catch (error) {
+        console.warn("Não foi possível ler histórico na nuvem:", error.message);
+    }
+
+    ofSetHiddenBank(ids.length ? ids : ["__all__"]);
+
+    const box = document.getElementById("openFinanceCards");
+
+    if (box) {
+        box.innerHTML = '<div class="of-empty-state">Histórico limpo neste navegador. Novas solicitações aparecerão aqui.</div>';
+    }
+
+    alert("Histórico limpo da tela do DeasBank.");
+};
+
+const v20OldLoadOpenFinanceRequestsBank = loadOpenFinanceRequests;
+loadOpenFinanceRequests = async function() {
+    await v20OldLoadOpenFinanceRequestsBank();
+
+    if (ofGetHiddenBank().includes("__all__")) {
+        const box = document.getElementById("openFinanceCards");
+        if (box) {
+            box.innerHTML = '<div class="of-empty-state">Histórico limpo neste navegador. Novas solicitações aparecerão aqui.</div>';
+        }
+    }
+};
+
+const v20OldRenderDashboardBank = renderDashboard;
+renderDashboard = function(user) {
+    if (user) {
+        user.score = calculateWeightedScore(user);
+    }
+
+    v20OldRenderDashboardBank(user);
+
+    ["currentBalanceAmount", "totalDebtAmount", "loanLimit", "availableCredit", "totalTakenLoans"].forEach(id => {
+        const element = document.getElementById(id);
+
+        if (element) {
+            element.classList.add("bank-money-value");
+        }
+    });
+};
