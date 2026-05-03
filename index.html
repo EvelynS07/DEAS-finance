@@ -30,6 +30,7 @@
                     <p class="subtitle">Rápido, seguro e digital.</p>
                     <form id="registerForm">
                         <div class="input-field"><input type="text" id="regName" placeholder="Nome Completo" required></div>
+                        <div class="input-field"><input type="email" id="regEmail" placeholder="E-mail" required></div>
                         <div class="input-field"><input type="text" id="regCpf" placeholder="CPF (Apenas números)" maxlength="15" required></div>
                         <div class="input-field"><input type="password" id="regPassword" placeholder="Senha" required></div>
                         <div class="terms-check">
@@ -43,10 +44,10 @@
                 <!-- Login -->
                 <div class="form-content hidden" id="loginBox">
                     <h2>Acessar DEASBank</h2>
-                    <p class="subtitle">Informe suas credenciais</p>
+                    <p class="subtitle">Entre com seu e-mail e senha</p>
                     <form id="loginForm">
                         <div class="input-field">
-                            <input type="text" id="loginCpf" placeholder="CPF" maxlength="15" required>
+                            <input type="email" id="loginEmail" placeholder="E-mail" required>
                         </div>
                         <div class="input-field">
                             <input type="password" id="loginPassword" placeholder="Senha" required>
@@ -153,7 +154,7 @@
                 <div>
                     <span class="of-eyebrow">Open Finance</span>
                     <h1>Central Open Finance</h1>
-                    <p>Analise solicitações recebidas do Deas Finance com consentimento e dados mínimos do cliente.</p>
+                    <p>Aceite conexões e transferências de dados solicitadas pelo Deas Finance com duplo consentimento.</p>
                 </div>
                 <button class="btn-dark of-refresh" onclick="loadOpenFinanceRequests()">Atualizar pedidos</button>
             </header>
@@ -162,17 +163,17 @@
                 <div class="dash-card of-metric-card">
                     <span>Solicitações</span>
                     <h2 id="ofTotalRequests">0</h2>
-                    <p>Total recebido do Deas Finance.</p>
+                    <p>Pedidos recebidos do Deas Finance.</p>
                 </div>
                 <div class="dash-card of-metric-card">
                     <span>Pendentes</span>
                     <h2 id="ofPendingRequests">0</h2>
-                    <p>Aguardando análise do DeasBank.</p>
+                    <p>Aguardando aceite do usuário.</p>
                 </div>
                 <div class="dash-card of-metric-card">
-                    <span>Aprovadas</span>
+                    <span>Aceitas</span>
                     <h2 id="ofApprovedRequests">0</h2>
-                    <p>Crédito liberado após avaliação.</p>
+                    <p>Conexões ou dados liberados.</p>
                 </div>
             </div>
 
@@ -180,9 +181,9 @@
                 <div class="of-card-head">
                     <div>
                         <h3>Pedidos recebidos</h3>
-                        <p>O DeasBank recebe apenas nome, e-mail mascarado, score, faixa de saldo, faixa de dívida e limite disponível.</p>
+                        <p>O DeasBank mostra solicitações de conexão e de transferência de renda, saldo, dívidas e limite. O usuário decide aceitar ou recusar.</p>
                     </div>
-                    <span class="of-secure-badge">Consentimento ativo</span>
+                    <span class="of-secure-badge">Duplo aceite</span>
                 </div>
 
                 <div id="openFinanceCards" class="of-request-grid">
@@ -206,6 +207,7 @@
 
     <!-- Firebase compat: não exige npm, Vite ou bundler -->
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
     <script src="script.js"></script>
 </body>

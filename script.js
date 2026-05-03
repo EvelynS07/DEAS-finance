@@ -11,9 +11,11 @@ const firebaseConfig = {
 };
 
 let deasBankDb = null;
+let deasBankAuth = null;
 
 try {
     firebase.initializeApp(firebaseConfig);
+    deasBankAuth = firebase.auth();
     deasBankDb = firebase.firestore();
 } catch (error) {
     console.error("Erro ao iniciar Firebase do DeasBank:", error);
@@ -21,17 +23,69 @@ try {
 
 // --- ESTRUTURA DE DADOS ---
 const ClientRegistry = {
-    storage: {}, 
+    storage: {},
     insert(cpf, data) { this.storage[cpf] = data; },
     get(cpf) { return this.storage[cpf]; }
 };
 
 let currentUserCpf = null;
+let currentUserUid = null;
+
+// --- HELPERS ---
+function cleanCpf(cpf) {
+    return String(cpf || '').replace(/\D/g, '');
+}
+
+function formatCpf(cpf) {
+    const c = cleanCpf(cpf);
+    if (c.length !== 11) return cpf;
+    return c.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+}
+
+function defaultUserData(name, email, cpf) {
+    return {
+        nome: name,
+        email,
+        cpf: cleanCpf(cpf),
+        scoreOriginal: Math.floor(Math.random() * 400) + 500,
+        score: 0,
+        dividas: [
+            { empresa: "Energia S/A", vencimento: "2026-05-10", valor: 150.00, peso: 1.2 },
+            { empresa: "Net Plus", vencimento: "2026-05-15", valor: 100.00, peso: 1.0 }
+        ],
+        limite: 1500.00,
+        createdAtText: new Date().toISOString()
+    };
+}
+
+async function saveUserToFirestore(uid, data) {
+    if (!deasBankDb || !uid) return;
+    const safeData = { ...data };
+    delete safeData.senha;
+    await deasBankDb.collection('users').doc(uid).set({
+        ...safeData,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+}
+
+async function loadUserFromFirestore(uid) {
+    if (!deasBankDb || !uid) return null;
+    const doc = await deasBankDb.collection('users').doc(uid).get();
+    return doc.exists ? doc.data() : null;
+}
+
+async function persistCurrentUser() {
+    if (!currentUserUid || !currentUserCpf) return;
+    const user = ClientRegistry.get(currentUserCpf);
+    if (user) {
+        await saveUserToFirestore(currentUserUid, user).catch(console.error);
+    }
+}
 
 // --- RECURSIVIDADE ---
 function sumDebts(debts, index = 0) {
     if (index >= debts.length) return 0;
-    return debts[index].valor + sumDebts(debts, index + 1);
+    return Number(debts[index].valor || 0) + sumDebts(debts, index + 1);
 }
 
 // --- NAVEGAÇÃO & MODAL ---
@@ -45,62 +99,107 @@ function showRegister() {
 }
 function showLgpdModal() { document.getElementById('lgpdModal').classList.remove('hidden'); }
 function closeLgpdModal() { document.getElementById('lgpdModal').classList.add('hidden'); }
-function logout() { location.reload(); }
+async function logout() {
+    try {
+        if (deasBankAuth) await deasBankAuth.signOut();
+    } catch (e) {
+        console.warn(e);
+    }
+    location.reload();
+}
 
-// --- CADASTRO ---
-document.getElementById('registerForm').addEventListener('submit', function(e) {
+// --- CADASTRO COM CPF + E-MAIL ---
+// O CPF fica salvo no Firestore. O login é feito por e-mail e senha.
+document.getElementById('registerForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    const name = document.getElementById('regName').value;
-    const cpf = document.getElementById('regCpf').value;
+
+    if (!deasBankAuth || !deasBankDb) {
+        alert("Firebase não iniciou. Confira se Authentication e Firestore estão ativos.");
+        return;
+    }
+
+    const name = document.getElementById('regName').value.trim();
+    const email = document.getElementById('regEmail').value.trim().toLowerCase();
+    const cpf = cleanCpf(document.getElementById('regCpf').value);
     const password = document.getElementById('regPassword').value;
 
-    ClientRegistry.insert(cpf, {
-        nome: name,
-        senha: password,
-        scoreOriginal: Math.floor(Math.random() * 400) + 500, // Começa entre 500 e 900
-        score: 0,
-        dividas: [
-            { empresa: "Energia S/A", vencimento: "2026-05-10", valor: 150.00, peso: 1.2 },
-            { empresa: "Net Plus", vencimento: "2026-05-15", valor: 100.00, peso: 1.0 }
-        ],
-        limite: 1500.00
-    });
+    if (!name || !email || !cpf || !password) {
+        alert("Preencha todos os campos.");
+        return;
+    }
 
-    alert("Cadastro realizado!");
-    showLogin();
-});
+    if (cpf.length !== 11) {
+        alert("Digite um CPF válido com 11 números.");
+        return;
+    }
 
-// --- LOGIN ---
-document.getElementById('loginForm').addEventListener('submit', function(e){
-    e.preventDefault();
-    const cpf = document.getElementById('loginCpf').value;
-    const user = ClientRegistry.get(cpf);
+    try {
+        const cred = await deasBankAuth.createUserWithEmailAndPassword(email, password);
+        await cred.user.updateProfile({ displayName: name });
 
-    if (user && user.senha === document.getElementById('loginPassword').value) {
-        currentUserCpf = cpf;
-        renderDashboard(user);
-    } else {
-        alert("Credenciais inválidas!");
+        const data = defaultUserData(name, email, cpf);
+        data.uid = cred.user.uid;
+
+        ClientRegistry.insert(cpf, { ...data, senha: password });
+        await saveUserToFirestore(cred.user.uid, data);
+
+        alert("Cadastro realizado e salvo no Firebase!");
+        showLogin();
+    } catch (error) {
+        alert("Erro ao cadastrar: " + error.message);
     }
 });
 
-// --- LÓGICA DE PESOS E REGRAS (O coração do ajuste) ---
+// --- LOGIN POR E-MAIL ---
+document.getElementById('loginForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+
+    if (!deasBankAuth || !deasBankDb) {
+        alert("Firebase não iniciou. Confira se Authentication e Firestore estão ativos.");
+        return;
+    }
+
+    const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+    const password = document.getElementById('loginPassword').value;
+
+    try {
+        const cred = await deasBankAuth.signInWithEmailAndPassword(email, password);
+        const uid = cred.user.uid;
+        const profile = await loadUserFromFirestore(uid);
+
+        if (!profile) {
+            const fallback = defaultUserData(cred.user.displayName || "Cliente DeasBank", email, "00000000000");
+            fallback.uid = uid;
+            await saveUserToFirestore(uid, fallback);
+            ClientRegistry.insert(fallback.cpf, { ...fallback, senha: password });
+            currentUserCpf = fallback.cpf;
+        } else {
+            const cpf = cleanCpf(profile.cpf || "00000000000");
+            ClientRegistry.insert(cpf, { ...profile, senha: password });
+            currentUserCpf = cpf;
+        }
+
+        currentUserUid = uid;
+        renderDashboard(ClientRegistry.get(currentUserCpf));
+    } catch (error) {
+        alert("Erro no login: " + error.message);
+    }
+});
+
+// --- LÓGICA DE PESOS E REGRAS ---
 function calculateWeightedScore(user) {
-    // PESOS DEFINIDOS:
-    const PESO_POR_PENDENCIA = 30;    // Cada dívida tira 30 pontos fixos
-    const PESO_VALOR_DIVIDA = 0.05;   // Cada R$ 1,00 de dívida tira 0.05 pontos
-    const PENALIDADE_INTERNA = 1.5;   // Dívidas com o "DEASBank" pesam 50% a mais
+    const PESO_POR_PENDENCIA = 30;
+    const PESO_VALOR_DIVIDA = 0.05;
+    const PENALIDADE_INTERNA = 1.5;
 
     let deducaoTotal = 0;
 
     user.dividas.forEach(divida => {
         let multiplicador = divida.empresa === "DEASBank" ? PENALIDADE_INTERNA : 1.0;
-        
-        // Regra: (Fixo + (Valor * Proporção)) * Peso da Origem
-        deducaoTotal += (PESO_POR_PENDENCIA + (divida.valor * PESO_VALOR_DIVIDA)) * multiplicador;
+        deducaoTotal += (PESO_POR_PENDENCIA + (Number(divida.valor || 0) * PESO_VALOR_DIVIDA)) * multiplicador;
     });
 
-    const novoScore = user.scoreOriginal - deducaoTotal;
+    const novoScore = Number(user.scoreOriginal || 500) - deducaoTotal;
     return Math.max(0, Math.floor(novoScore));
 }
 
@@ -110,7 +209,6 @@ function renderDashboard(user) {
     document.getElementById('dashboardSection').classList.remove('hidden');
     document.getElementById('clientNameDisplay').innerText = user.nome;
 
-    // Aplica a nova lógica de pesos
     user.score = calculateWeightedScore(user);
 
     const scoreCircle = document.getElementById('scoreCircle');
@@ -121,7 +219,6 @@ function renderDashboard(user) {
     scoreCircle.style.strokeDasharray = `${scorePct}, 100`;
     scoreNumber.textContent = user.score;
 
-    // Cores nas bordas (Interface original mantida)
     if (user.score < 400) {
         scoreCircle.setAttribute('class', 'circle stroke-low');
         scoreNumber.setAttribute('class', 'percentage text-low');
@@ -138,6 +235,7 @@ function renderDashboard(user) {
 
     renderDebtTable(user);
     updateInvestmentsUI();
+    persistCurrentUser();
 }
 
 function renderDebtTable(user) {
@@ -146,7 +244,7 @@ function renderDebtTable(user) {
         <tr>
             <td><strong>${d.empresa}</strong></td>
             <td>${d.vencimento}</td>
-            <td>R$ ${d.valor.toFixed(2)}</td>
+            <td>R$ ${Number(d.valor || 0).toFixed(2)}</td>
             <td><span class="status-badge">Pendente</span></td>
             <td><button class="btn-action" onclick="payDebt(${index})">Pagar</button></td>
         </tr>
@@ -155,22 +253,19 @@ function renderDebtTable(user) {
     const total = sumDebts(user.dividas);
     document.getElementById('totalDebtAmount').innerText = `R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
     document.getElementById('debtCount').innerText = `${user.dividas.length} pendências ativas`;
-    document.getElementById('loanLimit').innerText = `R$ ${user.limite.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+    document.getElementById('loanLimit').innerText = `R$ ${Number(user.limite || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
 }
 
 // --- REGRAS DE CONCESSÃO ---
 function requestLimitIncrease() {
     const user = ClientRegistry.get(currentUserCpf);
     const totalDividas = sumDebts(user.dividas);
-    
-    // Regra de Concessão 1: Peso do comprometimento de renda
-    // Se a dívida total for maior que 20% do limite atual, nega.
-    if (totalDividas > (user.limite * 0.2)) {
+
+    if (totalDividas > (Number(user.limite || 0) * 0.2)) {
         alert("Aumento Negado: Comprometimento financeiro muito alto.");
         return;
     }
 
-    // Regra de Concessão 2: Peso do Score
     if (user.score >= 750) {
         user.limite += 1000;
         alert("Aumento de R$ 1.000,00 aprovado!");
@@ -180,15 +275,15 @@ function requestLimitIncrease() {
     } else {
         alert("Aumento negado por baixo Score.");
     }
+
     renderDashboard(user);
 }
 
 function takeLoan() {
     const user = ClientRegistry.get(currentUserCpf);
     const LIMITE_MAXIMO = 5000.00;
-    const totalContratado = user.dividas.filter(d => d.empresa === "DEASBank").reduce((a, b) => a + b.valor, 0);
+    const totalContratado = user.dividas.filter(d => d.empresa === "DEASBank").reduce((a, b) => a + Number(b.valor || 0), 0);
 
-    // Regra de Concessão 3: Avaliação de Risco
     if (user.score < 450) {
         alert("Empréstimo negado: Risco de crédito elevado para o seu perfil atual.");
         return;
@@ -197,13 +292,13 @@ function takeLoan() {
     if (totalContratado + 1000 <= LIMITE_MAXIMO) {
         const dataVenc = new Date();
         dataVenc.setDate(dataVenc.getDate() + 30);
-        
-        user.dividas.push({ 
-            empresa: "DEASBank", 
-            vencimento: dataVenc.toISOString().split('T')[0], 
-            valor: 1000.00 
+
+        user.dividas.push({
+            empresa: "DEASBank",
+            vencimento: dataVenc.toISOString().split('T')[0],
+            valor: 1000.00
         });
-        
+
         renderDashboard(user);
         alert("Empréstimo liberado com sucesso!");
     } else {
@@ -211,27 +306,19 @@ function takeLoan() {
     }
 }
 
-// --- FUNÇÃO DE PAGAMENTO ATUALIZADA ---
 function payDebt(index) {
     const user = ClientRegistry.get(currentUserCpf);
     const divida = user.dividas[index];
 
-    // Validação: Verifica se o limite disponível cobre o valor da dívida
     if (user.limite < divida.valor) {
         alert("Saldo insuficiente no Limite Disponível para quitar esta dívida.");
         return;
     }
 
-    if (confirm(`Confirmar pagamento de R$ ${divida.valor.toFixed(2)} utilizando seu limite?`)) {
-        // 1. Retira o saldo do limite disponível
+    if (confirm(`Confirmar pagamento de R$ ${Number(divida.valor || 0).toFixed(2)} utilizando seu limite?`)) {
         user.limite -= divida.valor;
-
-        // 2. Remove a dívida da lista (baixa no sistema)
         user.dividas.splice(index, 1);
-
-        // 3. Atualiza toda a interface (Score, Tabelas, Cards)
         renderDashboard(user);
-
         alert("Pagamento processado! O valor foi descontado do seu limite e seu Score será recalculado.");
     }
 }
@@ -261,7 +348,6 @@ function switchTab(tabName) {
         return;
     }
 
-    // Mantém compatibilidade com o botão existente: switchTab('open finance')
     if (tabName === 'open finance' || tabName === 'openFinance') {
         if (openFinance) openFinance.classList.remove('hidden');
         if (navItems[2]) navItems[2].classList.add('active');
@@ -276,9 +362,8 @@ function updateInvestmentsUI() {
 
     const totalContratado = user.dividas
         .filter(d => d.empresa === "DEASBank")
-        .reduce((a, b) => a + b.valor, 0);
+        .reduce((a, b) => a + Number(b.valor || 0), 0);
 
-    // O código só tenta atualizar se os IDs existirem no HTML
     const elTotal = document.getElementById('totalTakenLoans');
     const elAvailable = document.getElementById('availableCredit');
 
@@ -308,21 +393,33 @@ function escapeOpenFinanceText(value) {
 }
 
 function openFinanceStatusLabel(status) {
-    if (status === 'approved') return 'Aprovado';
-    if (status === 'denied') return 'Negado';
-    return 'Pendente';
+    if (status === 'connection_approved') return 'Conexão aceita';
+    if (status === 'connection_denied') return 'Conexão recusada';
+    if (status === 'data_approved') return 'Dados aceitos';
+    if (status === 'data_denied') return 'Dados recusados';
+    if (status === 'data_pending') return 'Aguardando dados';
+    if (status === 'approved') return 'Aceito';
+    if (status === 'denied') return 'Recusado';
+    return 'Aguardando aceite';
 }
 
 function openFinanceStatusClass(status) {
-    if (status === 'approved') return 'approved';
-    if (status === 'denied') return 'denied';
+    if (status === 'connection_approved' || status === 'data_approved' || status === 'approved') return 'approved';
+    if (status === 'connection_denied' || status === 'data_denied' || status === 'denied') return 'denied';
     return 'pending';
+}
+
+function requestTypeLabel(request) {
+    if (request.requestType === 'connection_request') return 'Conexão Open Finance';
+    if (request.requestType === 'data_transfer_request') return 'Transferência de renda e dados';
+    if (request.requestType === 'income_balance_debts_limit_transfer') return 'Transferência de renda e dados';
+    return request.purpose || 'Solicitação Open Finance';
 }
 
 function updateOpenFinanceCounters(requests) {
     const total = requests.length;
-    const pending = requests.filter(r => !r.status || r.status === 'pending').length;
-    const approved = requests.filter(r => r.status === 'approved').length;
+    const pending = requests.filter(r => !r.status || ['pending','connection_pending','data_pending'].includes(r.status)).length;
+    const approved = requests.filter(r => ['approved','connection_approved','data_approved'].includes(r.status)).length;
 
     const totalEl = document.getElementById('ofTotalRequests');
     const pendingEl = document.getElementById('ofPendingRequests');
@@ -357,9 +454,10 @@ async function loadOpenFinanceRequests() {
         }
 
         container.innerHTML = requests.map(request => {
-            const status = request.status || 'pending';
-            const canAnalyze = status !== 'approved' && status !== 'denied';
-            const approvedAmount = Number(request.approvedAmount || 0);
+            const status = request.status || 'connection_pending';
+            const canAnalyze = !['approved','denied','connection_approved','connection_denied','data_approved','data_denied'].includes(status);
+            const isDataRequest = request.requestType === 'data_transfer_request' || request.requestType === 'income_balance_debts_limit_transfer';
+            const requested = request.requestedData || {};
 
             return `
                 <article class="of-request-card">
@@ -372,24 +470,39 @@ async function loadOpenFinanceRequests() {
                         <span class="of-status ${openFinanceStatusClass(status)}">${openFinanceStatusLabel(status)}</span>
                     </div>
 
-                    <div class="of-data-grid">
-                        <div><small>Score</small><strong>${escapeOpenFinanceText(request.creditScore || 0)}</strong></div>
-                        <div><small>Saldo</small><strong>${escapeOpenFinanceText(request.balanceRange || 'Não informado')}</strong></div>
-                        <div><small>Dívida</small><strong>${escapeOpenFinanceText(request.debtRange || 'Não informado')}</strong></div>
-                        <div><small>Limite</small><strong>${formatOpenFinanceMoney(request.availableLimit)}</strong></div>
+                    <div class="of-consent-line">
+                        <strong>Tipo:</strong> ${escapeOpenFinanceText(requestTypeLabel(request))}
                     </div>
+
+                    ${isDataRequest ? `
+                        <div class="of-data-grid">
+                            <div><small>Salário/renda solicitado</small><strong>${formatOpenFinanceMoney(request.importedSalary || requested.importedSalary)}</strong></div>
+                            <div><small>Saldo DeasBank</small><strong>${formatOpenFinanceMoney(request.externalBalance || requested.externalBalance)}</strong></div>
+                            <div><small>Dívidas DeasBank</small><strong>${formatOpenFinanceMoney(request.externalDebt || requested.externalDebt)}</strong></div>
+                            <div><small>Limite DeasBank</small><strong>${formatOpenFinanceMoney(request.externalLimit || requested.externalLimit)}</strong></div>
+                        </div>
+                    ` : `
+                        <div class="of-data-grid">
+                            <div><small>Finalidade</small><strong>Conectar contas</strong></div>
+                            <div><small>Titularidade</small><strong>Mesma pessoa</strong></div>
+                            <div><small>Dados financeiros</small><strong>Não enviados ainda</strong></div>
+                            <div><small>Senha</small><strong>Nunca compartilhada</strong></div>
+                        </div>
+                    `}
 
                     <div class="of-consent-line">
-                        <strong>Finalidade:</strong> ${escapeOpenFinanceText(request.purpose || 'Análise de crédito')}
+                        <strong>Resumo:</strong> ${escapeOpenFinanceText(request.relationshipSummary || request.purpose || 'Solicitação pendente de aceite.')}
                     </div>
 
-                    ${status === 'approved' ? `<div class="of-result approved">Crédito aprovado: <strong>${formatOpenFinanceMoney(approvedAmount)}</strong></div>` : ''}
-                    ${status === 'denied' ? `<div class="of-result denied">Crédito negado pelo DeasBank.</div>` : ''}
+                    ${status === 'connection_approved' ? `<div class="of-result approved">Conexão aceita pelo DeasBank.</div>` : ''}
+                    ${status === 'data_approved' ? `<div class="of-result approved">Transferência de renda/dados aceita pelo DeasBank.</div>` : ''}
+                    ${status === 'connection_denied' ? `<div class="of-result denied">Conexão recusada pelo DeasBank.</div>` : ''}
+                    ${status === 'data_denied' ? `<div class="of-result denied">Transferência de renda/dados recusada pelo DeasBank.</div>` : ''}
 
                     <div class="of-actions">
                         ${canAnalyze ? `
-                            <button class="btn-action of-approve" onclick="approveOpenFinanceRequest('${request.id}', ${Number(request.availableLimit || 0)}, ${Number(request.creditScore || 0)})">Aprovar crédito</button>
-                            <button class="btn-action of-deny" onclick="denyOpenFinanceRequest('${request.id}')">Negar</button>
+                            <button class="btn-action of-approve" onclick="approveOpenFinanceRequest('${request.id}', '${escapeOpenFinanceText(request.requestType || '')}')">${isDataRequest ? 'Aceitar transferência' : 'Aceitar conexão'}</button>
+                            <button class="btn-action of-deny" onclick="denyOpenFinanceRequest('${request.id}', '${escapeOpenFinanceText(request.requestType || '')}')">${isDataRequest ? 'Recusar transferência' : 'Recusar conexão'}</button>
                         ` : `<small>${escapeOpenFinanceText(request.analysisMessage || 'Solicitação analisada')}</small>`}
                     </div>
                 </article>
@@ -401,48 +514,51 @@ async function loadOpenFinanceRequests() {
     }
 }
 
-async function approveOpenFinanceRequest(requestId, availableLimit, creditScore) {
+async function approveOpenFinanceRequest(requestId, requestType = '') {
     if (!deasBankDb) return alert('Firebase não iniciou.');
 
-    let approvedAmount = 0;
-
-    if (creditScore >= 700) {
-        approvedAmount = Math.min(availableLimit * 0.60, 5000);
-    } else if (creditScore >= 600) {
-        approvedAmount = Math.min(availableLimit * 0.35, 2500);
-    } else {
-        approvedAmount = Math.min(availableLimit * 0.15, 1000);
-    }
+    const isDataRequest = requestType === 'data_transfer_request' || requestType === 'income_balance_debts_limit_transfer';
+    const status = isDataRequest ? 'data_approved' : 'connection_approved';
+    const message = isDataRequest
+        ? 'Transferência de renda/dados aceita pelo DEASBank.'
+        : 'Conexão Open Finance aceita pelo DEASBank.';
 
     try {
         await deasBankDb.collection('openFinanceRequests').doc(requestId).update({
-            status: 'approved',
-            approvedAmount,
-            analysisMessage: 'Crédito aprovado pelo DEASBank.',
+            status,
+            analysisMessage: message,
+            acceptedAt: firebase.firestore.FieldValue.serverTimestamp(),
             analyzedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        alert(`Crédito aprovado: ${formatOpenFinanceMoney(approvedAmount)}`);
+        alert(isDataRequest ? 'Transferência aceita com sucesso.' : 'Conexão aceita com sucesso.');
         loadOpenFinanceRequests();
     } catch (error) {
-        alert('Erro ao aprovar: ' + error.message);
+        alert('Erro ao aceitar: ' + error.message);
     }
 }
 
-async function denyOpenFinanceRequest(requestId) {
+async function denyOpenFinanceRequest(requestId, requestType = '') {
     if (!deasBankDb) return alert('Firebase não iniciou.');
+
+    const isDataRequest = requestType === 'data_transfer_request' || requestType === 'income_balance_debts_limit_transfer';
+    const status = isDataRequest ? 'data_denied' : 'connection_denied';
+    const message = isDataRequest
+        ? 'Transferência de renda/dados recusada pelo DEASBank.'
+        : 'Conexão Open Finance recusada pelo DEASBank.';
 
     try {
         await deasBankDb.collection('openFinanceRequests').doc(requestId).update({
-            status: 'denied',
+            status,
             approvedAmount: 0,
-            analysisMessage: 'Crédito negado pelo DEASBank.',
+            analysisMessage: message,
+            deniedAt: firebase.firestore.FieldValue.serverTimestamp(),
             analyzedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        alert('Crédito negado pelo DEASBank.');
+        alert(isDataRequest ? 'Transferência recusada pelo DEASBank.' : 'Conexão recusada pelo DEASBank.');
         loadOpenFinanceRequests();
     } catch (error) {
-        alert('Erro ao negar: ' + error.message);
+        alert('Erro ao recusar: ' + error.message);
     }
 }
