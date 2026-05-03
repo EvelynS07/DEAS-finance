@@ -1,36 +1,29 @@
 :root {
-    /* Nova paleta baseada na imagem */
     --black: #21120b;      /* Marrom bem escuro (quase preto) para contrastar com tons quentes */
     --white: #faebd7;      /* Creme/Antique White para os fundos claros */
     --gray-bg: #ffd194;    /* Tom de fallback caso o gradiente falhe */
     --input-bg: #f5dcb3;   /* Creme mais escuro/trigo para inputs e cards */
     --primary: #e65100;    /* Laranja escuro vibrante (cor principal) */
 }
-
 * { 
     margin: 0; 
     padding: 0; 
     box-sizing: border-box; 
     font-family: 'Plus Jakarta Sans', sans-serif; 
 }
-
 body { 
-    /* Gradiente vibrante igual ao da imagem enviada */
     background: linear-gradient(135deg, #ffd000, #ff7b00, #d83000);
     background-attachment: fixed;
     overflow-x: hidden; 
 }
-
 .hidden { display: none !important; }
 
-/* --- AUTH SECTION --- */
 .auth-wrapper { 
     height: 100vh; 
     display: flex; 
     justify-content: center;
     align-items: center; 
 }
-
 .main-container { 
     display: flex; 
     width: 850px; 
@@ -40,7 +33,6 @@ body {
     overflow: hidden; 
     box-shadow: 0 15px 35px rgba(0,0,0,0.2); 
 }
-
 .side-panel { 
     flex: 1; 
     display: flex; 
@@ -49,47 +41,38 @@ body {
     align-items: center; 
     padding: 40px; 
 }
-
 .left-panel { 
     background-color: var(--black); 
     color: var(--white); 
     text-align: center; 
 }
-
 .brand-info .logo { 
     font-size: 24px; 
     font-weight: bold; 
     margin-bottom: 10px; 
 }
-
 .brand-info span { 
     color: var(--primary); 
 }
-
 .overlay-content h2 { 
     margin-bottom: 10px; 
 }
-
 .right-panel { 
     flex: 1.5;
     background-color: var(--white);
 }
-
 .form-content { 
     width: 80%; 
     text-align: center;
 }
-
 .subtitle { 
     color: #8c6a59; 
     margin-bottom: 25px; 
     font-size: 14px; 
 }
-
 .input-field { 
     margin-bottom: 15px; 
 }
-
 .input-field input { 
     width: 100%; 
     padding: 15px; 
@@ -98,7 +81,6 @@ body {
     border-radius: 8px; 
     color: var(--black);
 }
-
 .terms-check { 
     display: flex; 
     align-items: center; 
@@ -108,18 +90,15 @@ body {
     text-align: left; 
     color: var(--black);
 }
-
 .terms-check label { 
     cursor: pointer; 
     user-select: none; 
 }
-
 .terms-check a { 
     color: var(--primary); 
     text-decoration: underline; 
     cursor: pointer; 
 }
-
 .btn-dark { 
     background: var(--primary); 
     color: white; 
@@ -131,7 +110,6 @@ body {
     cursor: pointer; 
     transition: 0.3s; 
 }
-
 .btn-outline { 
     background: transparent; 
     border: 2px solid var(--primary); 
@@ -142,11 +120,9 @@ body {
     margin-top: 20px; 
     transition: 0.3s;
 }
-
 .btn-dark:hover, .btn-outline:hover { 
     opacity: 0.8; 
 }
-
 .toggle-mobile { 
     margin-top: 15px; 
     font-size: 13px; 
@@ -154,13 +130,11 @@ body {
     cursor: pointer; 
 }
 
-/* --- DASHBOARD SECTION --- */
 .dashboard-wrapper { 
     display: flex; 
     height: 100vh; 
     background: var(--white); 
 }
-
 .sidebar { 
     width: 260px; 
     background: var(--black); 
@@ -169,17 +143,14 @@ body {
     display: flex; 
     flex-direction: column; 
 }
-
 .logo-dash { 
     font-size: 22px; 
     font-weight: bold; 
     margin-bottom: 40px; 
 }
-
 .logo-dash span { 
     color: var(--primary); 
 }
-
 .nav-item { 
     padding: 15px; 
     border-radius: 8px; 
@@ -188,16 +159,13 @@ body {
     transition: 0.3s; 
     color: #bfa89e; 
 }
-
 .nav-item.active { 
     background: var(--primary); 
     color: white; 
 }
-
 .nav-item:hover { 
     color: white; 
 }
-
 .btn-logout { 
     margin-top: auto; 
     background: transparent; 
@@ -207,7 +175,6 @@ body {
     cursor: pointer; 
     border-radius: 5px; 
 }
-
 .main-content { 
     flex: 1; 
     padding: 40px; 
@@ -215,22 +182,18 @@ body {
     transition: opacity 0.3s ease; 
     background-color: var(--white);
 }
-
 .dash-header h1 {
     color: var(--black);
 }
-
 .dash-header p {
     color: #8c6a59;
 }
-
 .summary-grid { 
     display: grid; 
     grid-template-columns: repeat(3, 1fr); 
     gap: 20px; 
     margin-bottom: 30px; 
 }
-
 .dash-card { 
     background: var(--input-bg); 
     padding: 25px; 
@@ -238,29 +201,24 @@ body {
     box-shadow: 0 4px 15px rgba(0,0,0,0.03); 
     color: var(--black);
 }
-
 .dash-card h3 {
     color: var(--black);
 }
-
 .score-container { 
     width: 180px; 
     margin: 20px auto; 
     position: relative; 
 }
-
 .percentage { 
     font-size: 7px; 
     text-anchor: middle; 
     font-weight: 700; 
 }
-
 .circle-bg { 
     fill: none; 
     stroke: #e3cba8; 
     stroke-width: 3; 
 }
-
 .circle { 
     fill: transparent; 
     stroke-width: 3; 
@@ -281,20 +239,17 @@ body {
     border-collapse: collapse; 
     margin-top: 15px; 
 }
-
 .modern-table th { 
     text-align: left; 
     color: #8c6a59; 
     padding: 12px; 
     border-bottom: 1px solid #e3cba8; 
 }
-
 .modern-table td { 
     padding: 15px 12px; 
     border-bottom: 1px solid #e3cba8; 
     color: var(--black);
 }
-
 .status-badge { 
     background: #ffccbc; 
     color: #d83000; 
@@ -302,17 +257,14 @@ body {
     border-radius: 20px; 
     font-size: 12px; 
 }
-
 .text-danger { 
     color: #d83000; 
     margin: 10px 0; 
 }
-
 .text-success { 
     color: #2e7d32; 
     margin: 10px 0; 
 }
-
 .btn-action { 
     background: var(--white); 
     border: 1px solid var(--primary); 
@@ -322,7 +274,6 @@ body {
     cursor: pointer; 
     font-size: 12px; 
 }
-
 .modern-table .btn-action { 
     background: none; 
     border: none;
@@ -330,7 +281,6 @@ body {
     color: var(--primary); 
     font-weight: bold; 
 }
-
 .modern-table .btn-action:hover { 
     text-decoration: underline; 
     background-color: #ffe0b2;
@@ -341,7 +291,6 @@ body {
 #investmentsSection .dash-card { margin-top: 20px; }
 #investmentsSection .btn-dark {  max-width: 200px; }
 
-/* --- MODAL LGPD --- */
 .modal { 
     position: fixed;
     top: 0; left: 0; 
@@ -353,7 +302,6 @@ body {
     align-items: center; 
     z-index: 9999; 
 }
-
 .modal-content { 
     background: var(--white); 
     padding: 30px; 
@@ -364,19 +312,16 @@ body {
     box-shadow: 0 10px 25px rgba(0,0,0,0.2); 
     color: var(--black);
 }
-
 .modal-content h2 { 
     margin-bottom: 15px; 
     font-size: 20px; 
 }
-
 .modal-content p { 
     font-size: 14px; 
     color: #555; 
     line-height: 1.6; 
     margin-bottom: 10px; 
 }
-
 .modal-close { 
     position: absolute; 
     top: 15px; 
@@ -385,10 +330,8 @@ body {
     cursor: pointer; 
     color: #8c6a59; 
 }
-
 .modal-close:hover { color: var(--primary); }
 
-/* --- OPEN FINANCE INTEGRADO --- */
 .open-finance-header {
     display: flex;
     align-items: flex-start;
@@ -397,7 +340,6 @@ body {
     flex-wrap: wrap;
     margin-bottom: 25px;
 }
-
 .of-eyebrow {
     display: inline-block;
     color: var(--primary);
@@ -407,36 +349,30 @@ body {
     text-transform: uppercase;
     margin-bottom: 8px;
 }
-
 .of-refresh {
     width: auto;
     padding: 12px 22px;
     white-space: nowrap;
 }
-
 .of-summary-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-
 .of-metric-card span {
     color: #8c6a59;
     font-size: 13px;
     font-weight: 700;
 }
-
 .of-metric-card h2 {
     margin: 8px 0;
     color: var(--primary);
     font-size: 34px;
 }
-
 .of-metric-card p,
 .of-consent-card p {
     color: #8c6a59;
     font-size: 13px;
     line-height: 1.5;
 }
-
 .of-card-head {
     display: flex;
     align-items: flex-start;
@@ -445,7 +381,6 @@ body {
     flex-wrap: wrap;
     margin-bottom: 18px;
 }
-
 .of-secure-badge {
     display: inline-flex;
     align-items: center;
@@ -457,12 +392,10 @@ body {
     font-size: 12px;
     font-weight: 700;
 }
-
 .of-request-grid {
     display: grid;
     gap: 15px;
 }
-
 .of-empty-state {
     padding: 18px;
     border-radius: 12px;
@@ -470,7 +403,6 @@ body {
     color: #8c6a59;
     border: 1px dashed #e3cba8;
 }
-
 .of-request-card {
     background: rgba(250, 235, 215, 0.65);
     border: 1px solid #e3cba8;
@@ -478,7 +410,6 @@ body {
     padding: 18px;
     color: var(--black);
 }
-
 .of-request-top {
     display: flex;
     justify-content: space-between;
@@ -486,7 +417,6 @@ body {
     align-items: flex-start;
     margin-bottom: 14px;
 }
-
 .of-source {
     color: var(--primary);
     font-size: 11px;
@@ -494,17 +424,14 @@ body {
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
-
 .of-request-card h3 {
     margin: 4px 0;
     color: var(--black);
 }
-
 .of-request-card p {
     color: #8c6a59;
     font-size: 13px;
 }
-
 .of-status {
     padding: 6px 11px;
     border-radius: 999px;
@@ -514,31 +441,26 @@ body {
     background: #ffccbc;
     color: #d83000;
 }
-
 .of-status.approved {
     background: #dff3df;
     color: #2e7d32;
 }
-
 .of-status.denied {
     background: #ffe1e1;
     color: #b00020;
 }
-
 .of-data-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
     margin: 14px 0;
 }
-
 .of-data-grid div {
     background: var(--input-bg);
     border: 1px solid #e3cba8;
     border-radius: 12px;
     padding: 12px;
 }
-
 .of-data-grid small {
     display: block;
     color: #8c6a59;
@@ -546,11 +468,9 @@ body {
     font-size: 11px;
     font-weight: 700;
 }
-
 .of-data-grid strong {
     font-size: 14px;
 }
-
 .of-consent-line,
 .of-result {
     background: rgba(230, 81, 0, 0.08);
@@ -560,24 +480,20 @@ body {
     font-size: 13px;
     margin-bottom: 12px;
 }
-
 .of-result.approved {
     background: rgba(46, 125, 50, 0.12);
     color: #2e7d32;
 }
-
 .of-result.denied {
     background: rgba(216, 48, 0, 0.10);
     color: #b00020;
 }
-
 .of-actions {
     display: flex;
     gap: 10px;
     align-items: center;
     flex-wrap: wrap;
 }
-
 .of-actions .btn-action {
     border: 1px solid var(--primary);
     background: var(--white);
@@ -586,12 +502,10 @@ body {
     border-radius: 8px;
     text-decoration: none;
 }
-
 .of-actions .of-approve {
     background: var(--primary);
     color: white;
 }
-
 .of-actions .of-deny {
     background: #ffe1e1;
     color: #b00020;
