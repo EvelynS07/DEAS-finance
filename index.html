@@ -44,7 +44,7 @@
                 <!-- Login -->
                 <div class="form-content hidden" id="loginBox">
                     <h2>Acessar DEASBank</h2>
-                    <p class="subtitle">Entre com seu e-mail e senha</p>
+                    <p class="subtitle">Entre com e-mail e senha</p>
                     <form id="loginForm">
                         <div class="input-field">
                             <input type="email" id="loginEmail" placeholder="E-mail" required>
@@ -154,7 +154,7 @@
                 <div>
                     <span class="of-eyebrow">Open Finance</span>
                     <h1>Central Open Finance</h1>
-                    <p>Aceite conexões e transferências de dados solicitadas pelo Deas Finance com duplo consentimento.</p>
+                    <p>Analise solicitações recebidas do Deas Finance com consentimento e dados mínimos do cliente.</p>
                 </div>
                 <button class="btn-dark of-refresh" onclick="loadOpenFinanceRequests()">Atualizar pedidos</button>
             </header>
@@ -163,17 +163,17 @@
                 <div class="dash-card of-metric-card">
                     <span>Solicitações</span>
                     <h2 id="ofTotalRequests">0</h2>
-                    <p>Pedidos recebidos do Deas Finance.</p>
+                    <p>Total recebido do Deas Finance.</p>
                 </div>
                 <div class="dash-card of-metric-card">
                     <span>Pendentes</span>
                     <h2 id="ofPendingRequests">0</h2>
-                    <p>Aguardando aceite do usuário.</p>
+                    <p>Aguardando análise do DeasBank.</p>
                 </div>
                 <div class="dash-card of-metric-card">
-                    <span>Aceitas</span>
+                    <span>Aprovadas</span>
                     <h2 id="ofApprovedRequests">0</h2>
-                    <p>Conexões ou dados liberados.</p>
+                    <p>Crédito liberado após avaliação.</p>
                 </div>
             </div>
 
@@ -181,9 +181,9 @@
                 <div class="of-card-head">
                     <div>
                         <h3>Pedidos recebidos</h3>
-                        <p>O DeasBank mostra solicitações de conexão e de transferência de renda, saldo, dívidas e limite. O usuário decide aceitar ou recusar.</p>
+                        <p>O DeasBank recebe apenas nome, e-mail mascarado, score, faixa de saldo, faixa de dívida e limite disponível.</p>
                     </div>
-                    <span class="of-secure-badge">Duplo aceite</span>
+                    <span class="of-secure-badge">Consentimento ativo</span>
                 </div>
 
                 <div id="openFinanceCards" class="of-request-grid">
@@ -198,8 +198,8 @@
         <div class="modal-content">
             <span class="modal-close" onclick="closeLgpdModal()">&times;</span>
             <h2>Termos de Uso e Política de Privacidade</h2>
-            <p><strong>1. Coleta de Dados:</strong> Em conformidade com a Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018), informamos que coletamos seu Nome, CPF e Senha exclusivamente para fins de autenticação e análise de crédito simulada.</p>
-            <p><strong>2. Uso das Informações:</strong> Seus dados são processados localmente nesta aplicação e não são enviados ou vendidos para terceiros.</p>
+            <p><strong>1. Coleta de Dados:</strong> Em conformidade com a Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018), informamos que coletamos seu Nome, E-mail, CPF e Senha exclusivamente para fins de autenticação e análise de crédito simulada.</p>
+            <p><strong>2. Uso das Informações:</strong> Seus dados são salvos com segurança no Firebase para autenticação e funcionamento do painel. Eles não são vendidos para terceiros.</p>
             <p><strong>3. Seus Direitos:</strong> Você tem o direito de acessar, corrigir ou excluir seus dados a qualquer momento, fechando o navegador e limpando o cache desta sessão.</p>
             <button class="btn-dark" style="margin-top: 15px;" onclick="closeLgpdModal()">Entendi e Aceito</button>
         </div>
