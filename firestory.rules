@@ -6,21 +6,20 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
 
-      match /openFinanceConnections/{connectionId} {
+      // Permite o banco parceiro creditar saldo ou espelhar conexão no protótipo
+      allow create, update: if request.resource.data.lastOpenFinanceMoveReason is string
+        || request.resource.data.sameOwner == true;
+
+      match /openFinanceConnections/{connId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
+
+        // Permite o banco parceiro espelhar a conexão no protótipo
+        allow create, update: if request.resource.data.sameOwner == true;
       }
     }
 
     match /openFinanceRequests/{requestId} {
-      // Demo Open Finance entre Deas Finance e DeasBank.
-      // Permite que os dois apps criem pedidos e que o banco parceiro aceite/recuse.
-      allow create: if request.resource.data.sourceBank in ["Deas Finance", "DeasBank"];
-      allow read, update: if true;
-      allow delete: if false;
-    }
-
-    match /{document=**} {
-      allow read, write: if false;
+      allow read, create, update, delete: if true;
     }
   }
 }
