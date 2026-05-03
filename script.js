@@ -1,5 +1,7 @@
 // --- FIREBASE DO DEASBANK ---
-// Este arquivo usa Firebase compat, então não precisa de npm, Vite ou bundler.
+// Cadastro: nome, e-mail e senha.
+// Login: e-mail e senha.
+// CPF removido para evitar conflito.
 const firebaseConfig = {
     apiKey: "AIzaSyDHJNJzWu-_L4cWJ4jtPYKRrPu4gkdXjno",
     authDomain: "deasbank.firebaseapp.com",
@@ -24,34 +26,21 @@ try {
     console.error("Erro ao iniciar Firebase do DeasBank:", error);
 }
 
-// --- ESTRUTURA DE DADOS EM MEMÓRIA PARA A INTERFACE ---
 const ClientRegistry = {
     storage: {},
-    insert(id, data) { this.storage[id] = data; },
-    get(id) { return this.storage[id]; }
+    insert(id, data) {
+        this.storage[id] = data;
+    },
+    get(id) {
+        return this.storage[id];
+    }
 };
 
 let currentUserId = null;
-
-// Mantém compatibilidade com funções antigas que usavam currentUserCpf
-let currentUserCpf = null;
-
-// --- UTILITÁRIOS ---
-function onlyDigits(value) {
-    return String(value || '').replace(/\D/g, '');
-}
-
-function formatCPF(value) {
-    const digits = onlyDigits(value).slice(0, 11);
-
-    return digits
-        .replace(/^(\d{3})(\d)/, '$1.$2')
-        .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
-        .replace(/\.(\d{3})(\d)/, '.$1-$2');
-}
+let currentUserCpf = null; // compatibilidade com funções antigas; agora guarda o UID.
 
 function moneyBR(value) {
-    return Number(value || 0).toLocaleString('pt-BR', {
+    return Number(value || 0).toLocaleString("pt-BR", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
     });
@@ -64,12 +53,11 @@ function sumDebts(debts, index = 0) {
     return Number(debts[index].valor || 0) + sumDebts(debts, index + 1);
 }
 
-function buildDefaultUser({ uid, name, email, cpf }) {
+function buildDefaultUser({ uid, name, email }) {
     return {
         uid,
         nome: name,
         email,
-        cpf,
         scoreOriginal: Math.floor(Math.random() * 400) + 500,
         score: 0,
         dividas: [
@@ -90,11 +78,11 @@ async function saveUserToFirestore(uid, userData) {
 async function loadUserFromFirestore(uid) {
     if (!deasBankDb) throw new Error("Firestore não iniciou.");
 
-    const doc = await deasBankDb.collection("users").doc(uid).get();
+    const snap = await deasBankDb.collection("users").doc(uid).get();
 
-    if (!doc.exists) return null;
+    if (!snap.exists) return null;
 
-    return { uid, ...doc.data() };
+    return { uid, ...snap.data() };
 }
 
 async function persistCurrentUser() {
@@ -112,21 +100,21 @@ async function persistCurrentUser() {
 
 // --- NAVEGAÇÃO & MODAL ---
 function showLogin() {
-    document.getElementById('registerBox').classList.add('hidden');
-    document.getElementById('loginBox').classList.remove('hidden');
+    document.getElementById("registerBox").classList.add("hidden");
+    document.getElementById("loginBox").classList.remove("hidden");
 }
 
 function showRegister() {
-    document.getElementById('loginBox').classList.add('hidden');
-    document.getElementById('registerBox').classList.remove('hidden');
+    document.getElementById("loginBox").classList.add("hidden");
+    document.getElementById("registerBox").classList.remove("hidden");
 }
 
 function showLgpdModal() {
-    document.getElementById('lgpdModal').classList.remove('hidden');
+    document.getElementById("lgpdModal").classList.remove("hidden");
 }
 
 function closeLgpdModal() {
-    document.getElementById('lgpdModal').classList.add('hidden');
+    document.getElementById("lgpdModal").classList.add("hidden");
 }
 
 async function logout() {
@@ -143,8 +131,8 @@ async function logout() {
     location.reload();
 }
 
-// --- CADASTRO COM CPF, E-MAIL E SENHA ---
-document.getElementById('registerForm').addEventListener('submit', async function(e) {
+// --- CADASTRO SEM CPF ---
+document.getElementById("registerForm").addEventListener("submit", async function(e) {
     e.preventDefault();
 
     if (!deasBankAuth || !deasBankDb) {
@@ -152,18 +140,12 @@ document.getElementById('registerForm').addEventListener('submit', async functio
         return;
     }
 
-    const name = document.getElementById('regName').value.trim();
-    const email = document.getElementById('regEmail').value.trim().toLowerCase();
-    const cpf = onlyDigits(document.getElementById('regCpf').value);
-    const password = document.getElementById('regPassword').value;
+    const name = document.getElementById("regName").value.trim();
+    const email = document.getElementById("regEmail").value.trim().toLowerCase();
+    const password = document.getElementById("regPassword").value;
 
-    if (!name || !email || !cpf || !password) {
-        alert("Preencha nome, e-mail, CPF e senha.");
-        return;
-    }
-
-    if (cpf.length !== 11) {
-        alert("CPF inválido. Digite os 11 números.");
+    if (!name || !email || !password) {
+        alert("Preencha nome, e-mail e senha.");
         return;
     }
 
@@ -183,8 +165,7 @@ document.getElementById('registerForm').addEventListener('submit', async functio
         const userData = buildDefaultUser({
             uid,
             name,
-            email,
-            cpf
+            email
         });
 
         await saveUserToFirestore(uid, userData);
@@ -193,16 +174,16 @@ document.getElementById('registerForm').addEventListener('submit', async functio
         alert("Cadastro realizado com sucesso! Agora entre usando e-mail e senha.");
         showLogin();
 
-        const loginEmail = document.getElementById('loginEmail');
+        const loginEmail = document.getElementById("loginEmail");
         if (loginEmail) loginEmail.value = email;
     } catch (error) {
         console.error(error);
-        alert("Erro ao cadastrar: " + error.message);
+        alert("Erro ao cadastrar: " + translateFirebaseError(error));
     }
 });
 
-// --- LOGIN POR E-MAIL E SENHA ---
-document.getElementById('loginForm').addEventListener('submit', async function(e){
+// --- LOGIN POR E-MAIL ---
+document.getElementById("loginForm").addEventListener("submit", async function(e) {
     e.preventDefault();
 
     if (!deasBankAuth || !deasBankDb) {
@@ -210,8 +191,8 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
         return;
     }
 
-    const email = document.getElementById('loginEmail').value.trim().toLowerCase();
-    const password = document.getElementById('loginPassword').value;
+    const email = document.getElementById("loginEmail").value.trim().toLowerCase();
+    const password = document.getElementById("loginPassword").value;
 
     if (!email || !password) {
         alert("Informe e-mail e senha.");
@@ -224,13 +205,11 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
 
         let user = await loadUserFromFirestore(uid);
 
-        // Segurança: se o Auth existir mas o documento não existir, cria um perfil básico.
         if (!user) {
             user = buildDefaultUser({
                 uid,
                 name: credential.user.displayName || "Cliente DeasBank",
-                email: credential.user.email,
-                cpf: ""
+                email: credential.user.email
             });
 
             await saveUserToFirestore(uid, user);
@@ -242,11 +221,25 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
         renderDashboard(user);
     } catch (error) {
         console.error(error);
-        alert("Não foi possível entrar. Confira e-mail e senha.");
+        alert("Erro ao entrar: " + translateFirebaseError(error));
     }
 });
 
-// Se a pessoa atualizar a página, tenta manter a sessão logada.
+function translateFirebaseError(error) {
+    const code = error && error.code ? error.code : "";
+
+    if (code.includes("email-already-in-use")) return "este e-mail já está cadastrado.";
+    if (code.includes("invalid-email")) return "e-mail inválido.";
+    if (code.includes("weak-password")) return "a senha precisa ter pelo menos 6 caracteres.";
+    if (code.includes("user-not-found")) return "usuário não encontrado.";
+    if (code.includes("wrong-password")) return "senha incorreta.";
+    if (code.includes("invalid-credential")) return "e-mail ou senha incorretos.";
+    if (code.includes("network-request-failed")) return "falha de conexão.";
+
+    return error.message || "erro desconhecido.";
+}
+
+// Mantém sessão se atualizar a página.
 if (typeof firebase !== "undefined" && firebase.auth) {
     firebase.auth().onAuthStateChanged(async (authUser) => {
         if (!authUser || currentUserId) return;
@@ -266,7 +259,7 @@ if (typeof firebase !== "undefined" && firebase.auth) {
     });
 }
 
-// --- LÓGICA DE PESOS E REGRAS ---
+// --- SCORE ---
 function calculateWeightedScore(user) {
     const PESO_POR_PENDENCIA = 30;
     const PESO_VALOR_DIVIDA = 0.05;
@@ -284,33 +277,32 @@ function calculateWeightedScore(user) {
     return Math.max(0, Math.floor(novoScore));
 }
 
-// --- ATUALIZAÇÃO DE INTERFACE ---
 function renderDashboard(user) {
-    document.getElementById('authSection').classList.add('hidden');
-    document.getElementById('dashboardSection').classList.remove('hidden');
-    document.getElementById('clientNameDisplay').innerText = user.nome || "Cliente";
+    document.getElementById("authSection").classList.add("hidden");
+    document.getElementById("dashboardSection").classList.remove("hidden");
+    document.getElementById("clientNameDisplay").innerText = user.nome || "Cliente";
 
     user.score = calculateWeightedScore(user);
 
-    const scoreCircle = document.getElementById('scoreCircle');
-    const scoreNumber = document.getElementById('scoreNumber');
-    const scoreFeedback = document.getElementById('scoreFeedback');
+    const scoreCircle = document.getElementById("scoreCircle");
+    const scoreNumber = document.getElementById("scoreNumber");
+    const scoreFeedback = document.getElementById("scoreFeedback");
     const scorePct = (user.score / 1000) * 100;
 
     scoreCircle.style.strokeDasharray = `${scorePct}, 100`;
     scoreNumber.textContent = user.score;
 
     if (user.score < 400) {
-        scoreCircle.setAttribute('class', 'circle stroke-low');
-        scoreNumber.setAttribute('class', 'percentage text-low');
+        scoreCircle.setAttribute("class", "circle stroke-low");
+        scoreNumber.setAttribute("class", "percentage text-low");
         scoreFeedback.innerText = "Atenção: Score Baixo";
     } else if (user.score < 700) {
-        scoreCircle.setAttribute('class', 'circle stroke-med');
-        scoreNumber.setAttribute('class', 'percentage text-med');
+        scoreCircle.setAttribute("class", "circle stroke-med");
+        scoreNumber.setAttribute("class", "percentage text-med");
         scoreFeedback.innerText = "Seu score é Regular";
     } else {
-        scoreCircle.setAttribute('class', 'circle stroke-high');
-        scoreNumber.setAttribute('class', 'percentage text-high');
+        scoreCircle.setAttribute("class", "circle stroke-high");
+        scoreNumber.setAttribute("class", "percentage text-high");
         scoreFeedback.innerText = "Excelente saúde financeira!";
     }
 
@@ -319,7 +311,7 @@ function renderDashboard(user) {
 }
 
 function renderDebtTable(user) {
-    const tbody = document.getElementById('debtTableBody');
+    const tbody = document.getElementById("debtTableBody");
     const dividas = user.dividas || [];
 
     tbody.innerHTML = dividas.map((d, index) => `
@@ -330,15 +322,14 @@ function renderDebtTable(user) {
             <td><span class="status-badge">Pendente</span></td>
             <td><button class="btn-action" onclick="payDebt(${index})">Pagar</button></td>
         </tr>
-    `).join('');
+    `).join("");
 
     const total = sumDebts(dividas);
-    document.getElementById('totalDebtAmount').innerText = `R$ ${moneyBR(total)}`;
-    document.getElementById('debtCount').innerText = `${dividas.length} pendências ativas`;
-    document.getElementById('loanLimit').innerText = `R$ ${moneyBR(user.limite)}`;
+    document.getElementById("totalDebtAmount").innerText = `R$ ${moneyBR(total)}`;
+    document.getElementById("debtCount").innerText = `${dividas.length} pendências ativas`;
+    document.getElementById("loanLimit").innerText = `R$ ${moneyBR(user.limite)}`;
 }
 
-// --- REGRAS DE CONCESSÃO ---
 async function requestLimitIncrease() {
     const user = ClientRegistry.get(currentUserId);
     const totalDividas = sumDebts(user.dividas);
@@ -380,7 +371,7 @@ async function takeLoan() {
 
         user.dividas.push({
             empresa: "DEASBank",
-            vencimento: dataVenc.toISOString().split('T')[0],
+            vencimento: dataVenc.toISOString().split("T")[0],
             valor: 1000.00
         });
 
@@ -412,37 +403,35 @@ async function payDebt(index) {
     }
 }
 
-// --- ABAS ---
 function switchTab(tabName) {
-    const dash = document.getElementById('mainDashboard');
-    const inv = document.getElementById('investmentsSection');
-    const openFinance = document.getElementById('openFinanceSection');
-    const navItems = document.querySelectorAll('.nav-item');
+    const dash = document.getElementById("mainDashboard");
+    const inv = document.getElementById("investmentsSection");
+    const openFinance = document.getElementById("openFinanceSection");
+    const navItems = document.querySelectorAll(".nav-item");
 
-    navItems.forEach(item => item.classList.remove('active'));
+    navItems.forEach(item => item.classList.remove("active"));
 
-    if (dash) dash.classList.add('hidden');
-    if (inv) inv.classList.add('hidden');
-    if (openFinance) openFinance.classList.add('hidden');
+    if (dash) dash.classList.add("hidden");
+    if (inv) inv.classList.add("hidden");
+    if (openFinance) openFinance.classList.add("hidden");
 
-    if (tabName === 'dashboard') {
-        if (dash) dash.classList.remove('hidden');
-        if (navItems[0]) navItems[0].classList.add('active');
+    if (tabName === "dashboard") {
+        if (dash) dash.classList.remove("hidden");
+        if (navItems[0]) navItems[0].classList.add("active");
         return;
     }
 
-    if (tabName === 'investimentos') {
-        if (inv) inv.classList.remove('hidden');
-        if (navItems[1]) navItems[1].classList.add('active');
+    if (tabName === "investimentos") {
+        if (inv) inv.classList.remove("hidden");
+        if (navItems[1]) navItems[1].classList.add("active");
         updateInvestmentsUI();
         return;
     }
 
-    if (tabName === 'open finance' || tabName === 'openFinance') {
-        if (openFinance) openFinance.classList.remove('hidden');
-        if (navItems[2]) navItems[2].classList.add('active');
+    if (tabName === "open finance" || tabName === "openFinance") {
+        if (openFinance) openFinance.classList.remove("hidden");
+        if (navItems[2]) navItems[2].classList.add("active");
         loadOpenFinanceRequests();
-        return;
     }
 }
 
@@ -455,8 +444,8 @@ function updateInvestmentsUI() {
         .filter(d => d.empresa === "DEASBank")
         .reduce((a, b) => a + Number(b.valor || 0), 0);
 
-    const elTotal = document.getElementById('totalTakenLoans');
-    const elAvailable = document.getElementById('availableCredit');
+    const elTotal = document.getElementById("totalTakenLoans");
+    const elAvailable = document.getElementById("availableCredit");
 
     if (elTotal) {
         elTotal.innerText = `R$ ${moneyBR(totalContratado)}`;
@@ -467,50 +456,50 @@ function updateInvestmentsUI() {
     }
 }
 
-// --- OPEN FINANCE: RECEBER PEDIDOS DO DEAS FINANCE ---
+// --- OPEN FINANCE ---
 function formatOpenFinanceMoney(value) {
-    return Number(value || 0).toLocaleString('pt-BR', {
-        style: 'currency',
-        currency: 'BRL'
+    return Number(value || 0).toLocaleString("pt-BR", {
+        style: "currency",
+        currency: "BRL"
     });
 }
 
 function escapeOpenFinanceText(value) {
-    return String(value ?? '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#039;');
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
 }
 
 function openFinanceStatusLabel(status) {
-    if (status === 'connection_approved') return 'Conexão aceita';
-    if (status === 'connection_denied') return 'Conexão recusada';
-    if (status === 'data_pending') return 'Aguardando dados';
-    if (status === 'data_approved') return 'Dados aceitos';
-    if (status === 'data_denied') return 'Dados recusados';
-    if (status === 'approved') return 'Aceito';
-    if (status === 'denied') return 'Recusado';
+    if (status === "connection_approved") return "Conexão aceita";
+    if (status === "connection_denied") return "Conexão recusada";
+    if (status === "data_pending") return "Aguardando dados";
+    if (status === "data_approved") return "Dados aceitos";
+    if (status === "data_denied") return "Dados recusados";
+    if (status === "approved") return "Aceito";
+    if (status === "denied") return "Recusado";
 
-    return 'Aguardando aceite';
+    return "Aguardando aceite";
 }
 
 function openFinanceStatusClass(status) {
-    if (status === 'connection_approved' || status === 'data_approved' || status === 'approved') return 'approved';
-    if (status === 'connection_denied' || status === 'data_denied' || status === 'denied') return 'denied';
+    if (status === "connection_approved" || status === "data_approved" || status === "approved") return "approved";
+    if (status === "connection_denied" || status === "data_denied" || status === "denied") return "denied";
 
-    return 'pending';
+    return "pending";
 }
 
 function updateOpenFinanceCounters(requests) {
     const total = requests.length;
-    const pending = requests.filter(r => !String(r.status || '').includes('approved') && !String(r.status || '').includes('denied')).length;
-    const approved = requests.filter(r => String(r.status || '').includes('approved')).length;
+    const pending = requests.filter(r => !String(r.status || "").includes("approved") && !String(r.status || "").includes("denied")).length;
+    const approved = requests.filter(r => String(r.status || "").includes("approved")).length;
 
-    const totalEl = document.getElementById('ofTotalRequests');
-    const pendingEl = document.getElementById('ofPendingRequests');
-    const approvedEl = document.getElementById('ofApprovedRequests');
+    const totalEl = document.getElementById("ofTotalRequests");
+    const pendingEl = document.getElementById("ofPendingRequests");
+    const approvedEl = document.getElementById("ofApprovedRequests");
 
     if (totalEl) totalEl.innerText = total;
     if (pendingEl) pendingEl.innerText = pending;
@@ -518,14 +507,14 @@ function updateOpenFinanceCounters(requests) {
 }
 
 function openFinancePurposeLabel(request) {
-    if (request.requestType === 'connection_request') return 'Conexão entre contas';
-    if (request.requestType === 'data_transfer_request') return 'Transferência de renda/dados';
+    if (request.requestType === "connection_request") return "Conexão entre contas";
+    if (request.requestType === "data_transfer_request") return "Transferência de renda/dados";
 
-    return request.purpose || 'Open Finance';
+    return request.purpose || "Open Finance";
 }
 
 async function loadOpenFinanceRequests() {
-    const container = document.getElementById('openFinanceCards');
+    const container = document.getElementById("openFinanceCards");
 
     if (!container) return;
 
@@ -537,10 +526,10 @@ async function loadOpenFinanceRequests() {
     container.innerHTML = '<div class="of-empty-state">Carregando solicitações...</div>';
 
     try {
-        const snapshot = await deasBankDb.collection('openFinanceRequests').get();
+        const snapshot = await deasBankDb.collection("openFinanceRequests").get();
         const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        requests.sort((a, b) => String(b.createdAtText || b.createdAt || '').localeCompare(String(a.createdAtText || a.createdAt || '')));
+        requests.sort((a, b) => String(b.createdAtText || b.createdAt || "").localeCompare(String(a.createdAtText || a.createdAt || "")));
         updateOpenFinanceCounters(requests);
 
         if (!requests.length) {
@@ -549,8 +538,8 @@ async function loadOpenFinanceRequests() {
         }
 
         container.innerHTML = requests.map(request => {
-            const status = request.status || (request.requestType === 'connection_request' ? 'connection_pending' : 'data_pending');
-            const canAnalyze = !String(status).includes('approved') && !String(status).includes('denied');
+            const status = request.status || (request.requestType === "connection_request" ? "connection_pending" : "data_pending");
+            const canAnalyze = !String(status).includes("approved") && !String(status).includes("denied");
 
             const requested = request.requestedData || {};
             const importedSalary = request.importedSalary || requested.importedSalary || 0;
@@ -558,15 +547,15 @@ async function loadOpenFinanceRequests() {
             const externalDebt = request.externalDebt || requested.externalDebt || 0;
             const externalLimit = request.externalLimit || requested.externalLimit || 0;
 
-            const isConnection = request.requestType === 'connection_request';
+            const isConnection = request.requestType === "connection_request";
 
             return `
                 <article class="of-request-card">
                     <div class="of-request-top">
                         <div>
-                            <span class="of-source">${escapeOpenFinanceText(request.sourceBank || 'Deas Finance')}</span>
-                            <h3>${escapeOpenFinanceText(request.userName || 'Cliente')}</h3>
-                            <p>${escapeOpenFinanceText(request.emailMasked || 'e-mail protegido')}</p>
+                            <span class="of-source">${escapeOpenFinanceText(request.sourceBank || "Deas Finance")}</span>
+                            <h3>${escapeOpenFinanceText(request.userName || "Cliente")}</h3>
+                            <p>${escapeOpenFinanceText(request.emailMasked || "e-mail protegido")}</p>
                         </div>
                         <span class="of-status ${openFinanceStatusClass(status)}">${openFinanceStatusLabel(status)}</span>
                     </div>
@@ -589,20 +578,20 @@ async function loadOpenFinanceRequests() {
                         <strong>Finalidade:</strong> ${escapeOpenFinanceText(openFinancePurposeLabel(request))}
                     </div>
 
-                    ${status === 'connection_approved' ? `<div class="of-result approved">Conexão autorizada pelo DeasBank.</div>` : ''}
-                    ${status === 'connection_denied' ? `<div class="of-result denied">Conexão recusada pelo DeasBank.</div>` : ''}
-                    ${status === 'data_approved' ? `<div class="of-result approved">Transferência de renda/dados aceita.</div>` : ''}
-                    ${status === 'data_denied' ? `<div class="of-result denied">Transferência de renda/dados recusada.</div>` : ''}
+                    ${status === "connection_approved" ? `<div class="of-result approved">Conexão autorizada pelo DeasBank.</div>` : ""}
+                    ${status === "connection_denied" ? `<div class="of-result denied">Conexão recusada pelo DeasBank.</div>` : ""}
+                    ${status === "data_approved" ? `<div class="of-result approved">Transferência de renda/dados aceita.</div>` : ""}
+                    ${status === "data_denied" ? `<div class="of-result denied">Transferência de renda/dados recusada.</div>` : ""}
 
                     <div class="of-actions">
                         ${canAnalyze ? `
-                            <button class="btn-action of-approve" onclick="approveOpenFinanceRequest('${request.id}', '${request.requestType || ''}')">Aceitar solicitação</button>
-                            <button class="btn-action of-deny" onclick="denyOpenFinanceRequest('${request.id}', '${request.requestType || ''}')">Recusar</button>
-                        ` : `<small>${escapeOpenFinanceText(request.analysisMessage || 'Solicitação analisada')}</small>`}
+                            <button class="btn-action of-approve" onclick="approveOpenFinanceRequest('${request.id}', '${request.requestType || ""}')">Aceitar solicitação</button>
+                            <button class="btn-action of-deny" onclick="denyOpenFinanceRequest('${request.id}', '${request.requestType || ""}')">Recusar</button>
+                        ` : `<small>${escapeOpenFinanceText(request.analysisMessage || "Solicitação analisada")}</small>`}
                     </div>
                 </article>
             `;
-        }).join('');
+        }).join("");
     } catch (error) {
         console.error(error);
         container.innerHTML = `<div class="of-empty-state">Erro ao carregar solicitações: ${escapeOpenFinanceText(error.message)}</div>`;
@@ -610,58 +599,58 @@ async function loadOpenFinanceRequests() {
 }
 
 async function getOpenFinanceRequest(requestId) {
-    const doc = await deasBankDb.collection('openFinanceRequests').doc(requestId).get();
+    const snap = await deasBankDb.collection("openFinanceRequests").doc(requestId).get();
 
-    return doc.exists ? doc.data() : null;
+    return snap.exists ? snap.data() : null;
 }
 
-async function approveOpenFinanceRequest(requestId, requestType = '') {
-    if (!deasBankDb) return alert('Firebase não iniciou.');
+async function approveOpenFinanceRequest(requestId, requestType = "") {
+    if (!deasBankDb) return alert("Firebase não iniciou.");
 
     try {
         const current = await getOpenFinanceRequest(requestId);
         const type = requestType || current?.requestType;
 
-        const nextStatus = type === 'data_transfer_request' ? 'data_approved' : 'connection_approved';
-        const message = type === 'data_transfer_request'
-            ? 'Transferência de renda/dados aceita pelo DeasBank.'
-            : 'Conexão Open Finance aceita pelo DeasBank.';
+        const nextStatus = type === "data_transfer_request" ? "data_approved" : "connection_approved";
+        const message = type === "data_transfer_request"
+            ? "Transferência de renda/dados aceita pelo DeasBank."
+            : "Conexão Open Finance aceita pelo DeasBank.";
 
-        await deasBankDb.collection('openFinanceRequests').doc(requestId).update({
+        await deasBankDb.collection("openFinanceRequests").doc(requestId).update({
             status: nextStatus,
             analysisMessage: message,
             analyzedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        alert('Solicitação aceita com sucesso.');
+        alert("Solicitação aceita com sucesso.");
         loadOpenFinanceRequests();
     } catch (error) {
-        alert('Erro ao aceitar: ' + error.message);
+        alert("Erro ao aceitar: " + error.message);
     }
 }
 
-async function denyOpenFinanceRequest(requestId, requestType = '') {
-    if (!deasBankDb) return alert('Firebase não iniciou.');
+async function denyOpenFinanceRequest(requestId, requestType = "") {
+    if (!deasBankDb) return alert("Firebase não iniciou.");
 
     try {
         const current = await getOpenFinanceRequest(requestId);
         const type = requestType || current?.requestType;
 
-        const nextStatus = type === 'data_transfer_request' ? 'data_denied' : 'connection_denied';
-        const message = type === 'data_transfer_request'
-            ? 'Transferência de renda/dados recusada pelo DeasBank.'
-            : 'Conexão Open Finance recusada pelo DeasBank.';
+        const nextStatus = type === "data_transfer_request" ? "data_denied" : "connection_denied";
+        const message = type === "data_transfer_request"
+            ? "Transferência de renda/dados recusada pelo DeasBank."
+            : "Conexão Open Finance recusada pelo DeasBank.";
 
-        await deasBankDb.collection('openFinanceRequests').doc(requestId).update({
+        await deasBankDb.collection("openFinanceRequests").doc(requestId).update({
             status: nextStatus,
             approvedAmount: 0,
             analysisMessage: message,
             analyzedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        alert('Solicitação recusada.');
+        alert("Solicitação recusada.");
         loadOpenFinanceRequests();
     } catch (error) {
-        alert('Erro ao recusar: ' + error.message);
+        alert("Erro ao recusar: " + error.message);
     }
 }
