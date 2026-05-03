@@ -354,7 +354,8 @@ body {
     padding: 12px 22px;
     white-space: nowrap;
 }
-.of-summary-grid {
+.of-summary-grid,
+.of-mutual-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 .of-metric-card span {
@@ -392,6 +393,40 @@ body {
     font-size: 12px;
     font-weight: 700;
 }
+
+.of-list-tools {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 0 0 14px;
+}
+.of-filter {
+    border: 1px solid #e3cba8;
+    background: rgba(255,255,255,.45);
+    color: #8c6a59;
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.of-filter.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+.of-clean-summary {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: rgba(255,255,255,.42);
+    border: 1px solid #e3cba8;
+    color: #8c6a59;
+    font-size: 13px;
+}
+
 .of-request-grid {
     display: grid;
     gap: 15px;
@@ -514,6 +549,7 @@ body {
 
 @media (max-width: 900px) {
     .of-summary-grid,
+    .of-mutual-grid,
     .of-data-grid {
         grid-template-columns: 1fr;
     }

@@ -183,7 +183,7 @@
                     <p style="color:#8c6a59;font-size:13px;line-height:1.5">O DeasBank também pode iniciar o Open Finance. O Deas Finance precisa aceitar ou recusar.</p>
                     <button class="btn-dark" style="margin-top:10px" onclick="requestDeasFinanceConnection()">Conectar Deas Finance</button>
                 </div>
-                <div class="dash-card">
+                <div class="dash-card hidden" id="requestDeasFinanceDataCard">
                     <span class="of-eyebrow">Dados financeiros</span>
                     <h3>Pedir salário, saldo e crédito</h3>
                     <p style="color:#8c6a59;font-size:13px;line-height:1.5">Após a conexão aprovada, solicite renda, saldo, dívidas, limite e empréstimos ao Deas Finance.</p>
@@ -206,6 +206,11 @@
                     <span class="of-secure-badge">Consentimento ativo</span>
                 </div>
 
+                <div class="of-list-tools">
+                    <button class="of-filter active" type="button" id="ofFilterPending" onclick="setOpenFinanceListMode('pending')">Pendentes</button>
+                    <button class="of-filter" type="button" id="ofFilterAll" onclick="setOpenFinanceListMode('all')">Todos</button>
+                    <button class="of-filter" type="button" id="ofFilterSent" onclick="setOpenFinanceListMode('sent')">Enviados</button>
+                </div>
                 <div id="openFinanceCards" class="of-request-grid">
                     <div class="of-empty-state">Clique em <strong>Atualizar pedidos</strong> para carregar as solicitações.</div>
                 </div>
