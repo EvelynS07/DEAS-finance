@@ -1,3 +1,24 @@
+// --- FIREBASE DO DEASBANK ---
+// Esta configuração fica no script.js, não no firestory.rules.
+const firebaseConfig = {
+    apiKey: "AIzaSyDHJNJzWu-_L4cWJ4jtPYKRrPu4gkdXjno",
+    authDomain: "deasbank.firebaseapp.com",
+    projectId: "deasbank",
+    storageBucket: "deasbank.firebasestorage.app",
+    messagingSenderId: "225151516543",
+    appId: "1:225151516543:web:4278a1a2e1f62ede81a44a",
+    measurementId: "G-NFW52JEWNS"
+};
+
+let deasBankDb = null;
+
+try {
+    firebase.initializeApp(firebaseConfig);
+    deasBankDb = firebase.firestore();
+} catch (error) {
+    console.error("Erro ao iniciar Firebase do DeasBank:", error);
+}
+
 // --- ESTRUTURA DE DADOS ---
 const ClientRegistry = {
     storage: {}, 
@@ -190,7 +211,7 @@ function takeLoan() {
     }
 }
 
-f// --- FUNÇÃO DE PAGAMENTO ATUALIZADA ---
+// --- FUNÇÃO DE PAGAMENTO ATUALIZADA ---
 function payDebt(index) {
     const user = ClientRegistry.get(currentUserCpf);
     const divida = user.dividas[index];
@@ -218,20 +239,34 @@ function payDebt(index) {
 function switchTab(tabName) {
     const dash = document.getElementById('mainDashboard');
     const inv = document.getElementById('investmentsSection');
+    const openFinance = document.getElementById('openFinanceSection');
     const navItems = document.querySelectorAll('.nav-item');
-    
-    // Remove a classe active de todos os botões da barra lateral
+
     navItems.forEach(item => item.classList.remove('active'));
 
+    if (dash) dash.classList.add('hidden');
+    if (inv) inv.classList.add('hidden');
+    if (openFinance) openFinance.classList.add('hidden');
+
     if (tabName === 'dashboard') {
-        if(dash) dash.classList.remove('hidden');
-        if(inv) inv.classList.add('hidden');
-        if(navItems[0]) navItems[0].classList.add('active');
-    } else {
-        if(dash) dash.classList.add('hidden');
-        if(inv) inv.classList.remove('hidden');
-        if(navItems[1]) navItems[1].classList.add('active');
+        if (dash) dash.classList.remove('hidden');
+        if (navItems[0]) navItems[0].classList.add('active');
+        return;
+    }
+
+    if (tabName === 'investimentos') {
+        if (inv) inv.classList.remove('hidden');
+        if (navItems[1]) navItems[1].classList.add('active');
         updateInvestmentsUI();
+        return;
+    }
+
+    // Mantém compatibilidade com o botão existente: switchTab('open finance')
+    if (tabName === 'open finance' || tabName === 'openFinance') {
+        if (openFinance) openFinance.classList.remove('hidden');
+        if (navItems[2]) navItems[2].classList.add('active');
+        loadOpenFinanceRequests();
+        return;
     }
 }
 
@@ -253,4 +288,117 @@ function updateInvestmentsUI() {
     if (elAvailable) {
         elAvailable.innerText = `R$ ${(5000 - totalContratado).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
     }
+}
+
+// --- OPEN FINANCE: RECEBER PEDIDOS DO DEAS FINANCE ---
+function formatOpenFinanceMoney(value) {
+    return Number(value || 0).toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    });
+}
+
+function escapeOpenFinanceText(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
+function openFinanceStatusLabel(status) {
+    if (status === 'approved') return 'Aprovado';
+    if (status === 'denied') return 'Negado';
+    return 'Pendente';
+}
+
+async function loadOpenFinanceRequests() {
+    const tbody = document.getElementById('openFinanceTableBody');
+    if (!tbody) return;
+
+    if (!deasBankDb) {
+        tbody.innerHTML = '<tr><td colspan="7">Firebase do DeasBank não iniciou. Confira a configuração.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = '<tr><td colspan="7">Carregando solicitações...</td></tr>';
+
+    try {
+        const snapshot = await deasBankDb.collection('openFinanceRequests').get();
+        const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        requests.sort((a, b) => String(b.createdAtText || '').localeCompare(String(a.createdAtText || '')));
+
+        if (!requests.length) {
+            tbody.innerHTML = '<tr><td colspan="7">Nenhuma solicitação Open Finance recebida ainda.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = requests.map(request => {
+            const status = request.status || 'pending';
+            const canAnalyze = status !== 'approved' && status !== 'denied';
+
+            return `
+                <tr>
+                    <td>
+                        <strong>${escapeOpenFinanceText(request.userName || 'Cliente')}</strong><br>
+                        <small>${escapeOpenFinanceText(request.emailMasked || 'e-mail protegido')}</small>
+                    </td>
+                    <td>${escapeOpenFinanceText(request.creditScore || 0)}</td>
+                    <td>${escapeOpenFinanceText(request.balanceRange || 'Não informado')}</td>
+                    <td>${escapeOpenFinanceText(request.debtRange || 'Não informado')}</td>
+                    <td>${formatOpenFinanceMoney(request.availableLimit)}</td>
+                    <td><span class="status-badge">${openFinanceStatusLabel(status)}</span></td>
+                    <td>
+                        ${canAnalyze ? `
+                            <button class="btn-action" onclick="approveOpenFinanceRequest('${request.id}', ${Number(request.availableLimit || 0)}, ${Number(request.creditScore || 0)})">Aprovar</button>
+                            <button class="btn-action" style="margin-left:6px; background:#ffe1e1; color:#b00020;" onclick="denyOpenFinanceRequest('${request.id}')">Negar</button>
+                        ` : `<small>${escapeOpenFinanceText(request.analysisMessage || 'Analisado')}</small>`}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error(error);
+        tbody.innerHTML = `<tr><td colspan="7">Erro ao carregar solicitações: ${escapeOpenFinanceText(error.message)}</td></tr>`;
+    }
+}
+
+async function approveOpenFinanceRequest(requestId, availableLimit, creditScore) {
+    if (!deasBankDb) return alert('Firebase não iniciou.');
+
+    let approvedAmount = 0;
+
+    if (creditScore >= 700) {
+        approvedAmount = Math.min(availableLimit * 0.60, 5000);
+    } else if (creditScore >= 600) {
+        approvedAmount = Math.min(availableLimit * 0.35, 2500);
+    } else {
+        approvedAmount = Math.min(availableLimit * 0.15, 1000);
+    }
+
+    await deasBankDb.collection('openFinanceRequests').doc(requestId).update({
+        status: 'approved',
+        approvedAmount,
+        analysisMessage: 'Crédito aprovado pelo DEASBank.',
+        analyzedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    alert(`Crédito aprovado: ${formatOpenFinanceMoney(approvedAmount)}`);
+    loadOpenFinanceRequests();
+}
+
+async function denyOpenFinanceRequest(requestId) {
+    if (!deasBankDb) return alert('Firebase não iniciou.');
+
+    await deasBankDb.collection('openFinanceRequests').doc(requestId).update({
+        status: 'denied',
+        approvedAmount: 0,
+        analysisMessage: 'Crédito negado pelo DEASBank.',
+        analyzedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    alert('Crédito negado pelo DEASBank.');
+    loadOpenFinanceRequests();
 }

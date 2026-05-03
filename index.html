@@ -146,6 +146,45 @@
                 </div>
             </div>
         </div>
+
+        <!-- Seção Open Finance: adicionada sem alterar a identidade visual do banco -->
+        <div id="openFinanceSection" class="main-content hidden">
+            <header class="dash-header">
+                <h1>Open Finance</h1>
+                <p>Solicitações de análise recebidas do Deas Finance.</p>
+            </header>
+
+            <div class="dash-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:15px; flex-wrap:wrap;">
+                    <div>
+                        <h3>Pedidos recebidos</h3>
+                        <p style="font-size:13px; color:#888; margin-top:6px;">
+                            Aprove ou negue análises usando apenas dados mínimos compartilhados com consentimento.
+                        </p>
+                    </div>
+                    <button class="btn-action" onclick="loadOpenFinanceRequests()">Atualizar</button>
+                </div>
+
+                <table class="modern-table" style="margin-top:20px;">
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Score</th>
+                            <th>Saldo</th>
+                            <th>Dívida</th>
+                            <th>Limite</th>
+                            <th>Status</th>
+                            <th>Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="openFinanceTableBody">
+                        <tr>
+                            <td colspan="7">Nenhuma solicitação carregada.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>   
 
     <!-- MODAL LGPD -->
@@ -160,6 +199,9 @@
         </div>
     </div>
 
+    <!-- Firebase compat: não exige npm, Vite ou bundler -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
