@@ -313,55 +313,91 @@ function openFinanceStatusLabel(status) {
     return 'Pendente';
 }
 
+function openFinanceStatusClass(status) {
+    if (status === 'approved') return 'approved';
+    if (status === 'denied') return 'denied';
+    return 'pending';
+}
+
+function updateOpenFinanceCounters(requests) {
+    const total = requests.length;
+    const pending = requests.filter(r => !r.status || r.status === 'pending').length;
+    const approved = requests.filter(r => r.status === 'approved').length;
+
+    const totalEl = document.getElementById('ofTotalRequests');
+    const pendingEl = document.getElementById('ofPendingRequests');
+    const approvedEl = document.getElementById('ofApprovedRequests');
+
+    if (totalEl) totalEl.innerText = total;
+    if (pendingEl) pendingEl.innerText = pending;
+    if (approvedEl) approvedEl.innerText = approved;
+}
+
 async function loadOpenFinanceRequests() {
-    const tbody = document.getElementById('openFinanceTableBody');
-    if (!tbody) return;
+    const container = document.getElementById('openFinanceCards');
+    if (!container) return;
 
     if (!deasBankDb) {
-        tbody.innerHTML = '<tr><td colspan="7">Firebase do DeasBank não iniciou. Confira a configuração.</td></tr>';
+        container.innerHTML = '<div class="of-empty-state">Firebase do DeasBank não iniciou. Confira o script.js e as regras do Firestore.</div>';
         return;
     }
 
-    tbody.innerHTML = '<tr><td colspan="7">Carregando solicitações...</td></tr>';
+    container.innerHTML = '<div class="of-empty-state">Carregando solicitações...</div>';
 
     try {
         const snapshot = await deasBankDb.collection('openFinanceRequests').get();
         const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        requests.sort((a, b) => String(b.createdAtText || '').localeCompare(String(a.createdAtText || '')));
+        requests.sort((a, b) => String(b.createdAtText || b.createdAt || '').localeCompare(String(a.createdAtText || a.createdAt || '')));
+        updateOpenFinanceCounters(requests);
 
         if (!requests.length) {
-            tbody.innerHTML = '<tr><td colspan="7">Nenhuma solicitação Open Finance recebida ainda.</td></tr>';
+            container.innerHTML = '<div class="of-empty-state">Nenhuma solicitação Open Finance recebida ainda. Quando o Deas Finance conectar ao DeasBank, o pedido aparecerá aqui.</div>';
             return;
         }
 
-        tbody.innerHTML = requests.map(request => {
+        container.innerHTML = requests.map(request => {
             const status = request.status || 'pending';
             const canAnalyze = status !== 'approved' && status !== 'denied';
+            const approvedAmount = Number(request.approvedAmount || 0);
 
             return `
-                <tr>
-                    <td>
-                        <strong>${escapeOpenFinanceText(request.userName || 'Cliente')}</strong><br>
-                        <small>${escapeOpenFinanceText(request.emailMasked || 'e-mail protegido')}</small>
-                    </td>
-                    <td>${escapeOpenFinanceText(request.creditScore || 0)}</td>
-                    <td>${escapeOpenFinanceText(request.balanceRange || 'Não informado')}</td>
-                    <td>${escapeOpenFinanceText(request.debtRange || 'Não informado')}</td>
-                    <td>${formatOpenFinanceMoney(request.availableLimit)}</td>
-                    <td><span class="status-badge">${openFinanceStatusLabel(status)}</span></td>
-                    <td>
+                <article class="of-request-card">
+                    <div class="of-request-top">
+                        <div>
+                            <span class="of-source">${escapeOpenFinanceText(request.sourceBank || 'Deas Finance')}</span>
+                            <h3>${escapeOpenFinanceText(request.userName || 'Cliente')}</h3>
+                            <p>${escapeOpenFinanceText(request.emailMasked || 'e-mail protegido')}</p>
+                        </div>
+                        <span class="of-status ${openFinanceStatusClass(status)}">${openFinanceStatusLabel(status)}</span>
+                    </div>
+
+                    <div class="of-data-grid">
+                        <div><small>Score</small><strong>${escapeOpenFinanceText(request.creditScore || 0)}</strong></div>
+                        <div><small>Saldo</small><strong>${escapeOpenFinanceText(request.balanceRange || 'Não informado')}</strong></div>
+                        <div><small>Dívida</small><strong>${escapeOpenFinanceText(request.debtRange || 'Não informado')}</strong></div>
+                        <div><small>Limite</small><strong>${formatOpenFinanceMoney(request.availableLimit)}</strong></div>
+                    </div>
+
+                    <div class="of-consent-line">
+                        <strong>Finalidade:</strong> ${escapeOpenFinanceText(request.purpose || 'Análise de crédito')}
+                    </div>
+
+                    ${status === 'approved' ? `<div class="of-result approved">Crédito aprovado: <strong>${formatOpenFinanceMoney(approvedAmount)}</strong></div>` : ''}
+                    ${status === 'denied' ? `<div class="of-result denied">Crédito negado pelo DeasBank.</div>` : ''}
+
+                    <div class="of-actions">
                         ${canAnalyze ? `
-                            <button class="btn-action" onclick="approveOpenFinanceRequest('${request.id}', ${Number(request.availableLimit || 0)}, ${Number(request.creditScore || 0)})">Aprovar</button>
-                            <button class="btn-action" style="margin-left:6px; background:#ffe1e1; color:#b00020;" onclick="denyOpenFinanceRequest('${request.id}')">Negar</button>
-                        ` : `<small>${escapeOpenFinanceText(request.analysisMessage || 'Analisado')}</small>`}
-                    </td>
-                </tr>
+                            <button class="btn-action of-approve" onclick="approveOpenFinanceRequest('${request.id}', ${Number(request.availableLimit || 0)}, ${Number(request.creditScore || 0)})">Aprovar crédito</button>
+                            <button class="btn-action of-deny" onclick="denyOpenFinanceRequest('${request.id}')">Negar</button>
+                        ` : `<small>${escapeOpenFinanceText(request.analysisMessage || 'Solicitação analisada')}</small>`}
+                    </div>
+                </article>
             `;
         }).join('');
     } catch (error) {
         console.error(error);
-        tbody.innerHTML = `<tr><td colspan="7">Erro ao carregar solicitações: ${escapeOpenFinanceText(error.message)}</td></tr>`;
+        container.innerHTML = `<div class="of-empty-state">Erro ao carregar solicitações: ${escapeOpenFinanceText(error.message)}</div>`;
     }
 }
 
@@ -378,27 +414,35 @@ async function approveOpenFinanceRequest(requestId, availableLimit, creditScore)
         approvedAmount = Math.min(availableLimit * 0.15, 1000);
     }
 
-    await deasBankDb.collection('openFinanceRequests').doc(requestId).update({
-        status: 'approved',
-        approvedAmount,
-        analysisMessage: 'Crédito aprovado pelo DEASBank.',
-        analyzedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    try {
+        await deasBankDb.collection('openFinanceRequests').doc(requestId).update({
+            status: 'approved',
+            approvedAmount,
+            analysisMessage: 'Crédito aprovado pelo DEASBank.',
+            analyzedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
 
-    alert(`Crédito aprovado: ${formatOpenFinanceMoney(approvedAmount)}`);
-    loadOpenFinanceRequests();
+        alert(`Crédito aprovado: ${formatOpenFinanceMoney(approvedAmount)}`);
+        loadOpenFinanceRequests();
+    } catch (error) {
+        alert('Erro ao aprovar: ' + error.message);
+    }
 }
 
 async function denyOpenFinanceRequest(requestId) {
     if (!deasBankDb) return alert('Firebase não iniciou.');
 
-    await deasBankDb.collection('openFinanceRequests').doc(requestId).update({
-        status: 'denied',
-        approvedAmount: 0,
-        analysisMessage: 'Crédito negado pelo DEASBank.',
-        analyzedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    try {
+        await deasBankDb.collection('openFinanceRequests').doc(requestId).update({
+            status: 'denied',
+            approvedAmount: 0,
+            analysisMessage: 'Crédito negado pelo DEASBank.',
+            analyzedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
 
-    alert('Crédito negado pelo DEASBank.');
-    loadOpenFinanceRequests();
+        alert('Crédito negado pelo DEASBank.');
+        loadOpenFinanceRequests();
+    } catch (error) {
+        alert('Erro ao negar: ' + error.message);
+    }
 }

@@ -70,7 +70,7 @@
             <nav>
                 <div class="nav-item active" onclick="switchTab('dashboard')">Dashboard</div>
                 <div class="nav-item" onclick="switchTab('investimentos')">Investimentos</div>
-                <div class="nav-item" onclick="switchTab('open finance')">Open Finance</div>
+                <div class="nav-item" onclick="switchTab('openFinance')">Open Finance</div>
             </nav>
             <button onclick="logout()" class="btn-logout">Sair com segurança</button>
         </aside>
@@ -147,42 +147,47 @@
             </div>
         </div>
 
-        <!-- Seção Open Finance: adicionada sem alterar a identidade visual do banco -->
+        <!-- Seção Open Finance: integrada mantendo a identidade visual do DEASBank -->
         <div id="openFinanceSection" class="main-content hidden">
-            <header class="dash-header">
-                <h1>Open Finance</h1>
-                <p>Solicitações de análise recebidas do Deas Finance.</p>
+            <header class="dash-header open-finance-header">
+                <div>
+                    <span class="of-eyebrow">Open Finance</span>
+                    <h1>Central Open Finance</h1>
+                    <p>Analise solicitações recebidas do Deas Finance com consentimento e dados mínimos do cliente.</p>
+                </div>
+                <button class="btn-dark of-refresh" onclick="loadOpenFinanceRequests()">Atualizar pedidos</button>
             </header>
 
-            <div class="dash-card">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:15px; flex-wrap:wrap;">
+            <div class="summary-grid of-summary-grid">
+                <div class="dash-card of-metric-card">
+                    <span>Solicitações</span>
+                    <h2 id="ofTotalRequests">0</h2>
+                    <p>Total recebido do Deas Finance.</p>
+                </div>
+                <div class="dash-card of-metric-card">
+                    <span>Pendentes</span>
+                    <h2 id="ofPendingRequests">0</h2>
+                    <p>Aguardando análise do DeasBank.</p>
+                </div>
+                <div class="dash-card of-metric-card">
+                    <span>Aprovadas</span>
+                    <h2 id="ofApprovedRequests">0</h2>
+                    <p>Crédito liberado após avaliação.</p>
+                </div>
+            </div>
+
+            <div class="dash-card of-consent-card">
+                <div class="of-card-head">
                     <div>
                         <h3>Pedidos recebidos</h3>
-                        <p style="font-size:13px; color:#888; margin-top:6px;">
-                            Aprove ou negue análises usando apenas dados mínimos compartilhados com consentimento.
-                        </p>
+                        <p>O DeasBank recebe apenas nome, e-mail mascarado, score, faixa de saldo, faixa de dívida e limite disponível.</p>
                     </div>
-                    <button class="btn-action" onclick="loadOpenFinanceRequests()">Atualizar</button>
+                    <span class="of-secure-badge">Consentimento ativo</span>
                 </div>
 
-                <table class="modern-table" style="margin-top:20px;">
-                    <thead>
-                        <tr>
-                            <th>Cliente</th>
-                            <th>Score</th>
-                            <th>Saldo</th>
-                            <th>Dívida</th>
-                            <th>Limite</th>
-                            <th>Status</th>
-                            <th>Ação</th>
-                        </tr>
-                    </thead>
-                    <tbody id="openFinanceTableBody">
-                        <tr>
-                            <td colspan="7">Nenhuma solicitação carregada.</td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div id="openFinanceCards" class="of-request-grid">
+                    <div class="of-empty-state">Clique em <strong>Atualizar pedidos</strong> para carregar as solicitações.</div>
+                </div>
             </div>
         </div>
     </div>   
