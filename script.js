@@ -503,11 +503,13 @@ function isOpenFinanceFinished(status) {
     return String(status || "").includes("approved") || String(status || "").includes("denied");
 }
 
-function updateMutualDataVisibility(connectionStatus) {
+function updateMutualDataVisibility(connectionStatus, connectionApproved = false) {
     const card = document.getElementById("requestDeasFinanceDataCard");
     if (!card) return;
-    const canAsk = ["connection_approved", "data_approved", "data_denied"].includes(String(connectionStatus || ""));
-    card.classList.toggle("hidden", !canAsk);
+    const status = String(connectionStatus || "");
+    const hasApprovedConnection = connectionApproved === true || status === "connection_approved" || status === "data_approved" || status === "data_denied";
+    const blocked = status === "connection_pending" || status === "connection_denied" || status === "data_pending";
+    card.classList.toggle("hidden", !(hasApprovedConnection && !blocked));
 }
 
 function openFinanceStatusLabel(status) {
@@ -569,7 +571,7 @@ async function loadOpenFinanceRequests() {
         if (deasFinanceDb && currentUserId) {
             const localConnSnap = await deasBankDb.collection("users").doc(currentUserId).collection("openFinanceConnections").doc("deasfinance").get();
             const localConn = localConnSnap.exists ? localConnSnap.data() : null;
-            updateMutualDataVisibility(localConn?.connectionStatus);
+            updateMutualDataVisibility(localConn?.connectionStatus, localConn?.connectionApproved);
             const ids = [localConn?.partnerRequestId, localConn?.dataRequestId].filter(Boolean);
             for (const id of ids) {
                 const partnerSnap = await deasFinanceDb.collection("openFinanceRequests").doc(id).get();
@@ -671,6 +673,10 @@ async function approveOpenFinanceRequest(requestId, requestType = "") {
     try {
         const current = await getOpenFinanceRequest(requestId);
         const type = requestType || current?.requestType;
+        if (current?.status === "data_approved" || current?.status === "connection_approved") {
+            alert("Esse pedido já foi aprovado e não será processado novamente.");
+            return;
+        }
 
         const nextStatus = type === "data_transfer_request" ? "data_approved" : "connection_approved";
         const message = type === "data_transfer_request"
@@ -688,7 +694,7 @@ async function approveOpenFinanceRequest(requestId, requestType = "") {
             const requested = current?.requestedData || {};
             const amount = Number(requested.importedSalary || current?.importedSalary || 0);
             if (amount > 0 && user) {
-                const available = Number(user.saldo ?? user.limite ?? 0);
+                const available = Number(user.saldo || 0);
                 if (available < amount) {
                     alert(`Saldo insuficiente no DeasBank para transferir ${formatOpenFinanceMoney(amount)}. Disponível: ${formatOpenFinanceMoney(available)}.`);
                     return;
@@ -697,11 +703,17 @@ async function approveOpenFinanceRequest(requestId, requestType = "") {
                 updatePayload.importedSalary = amount;
                 updatePayload.transferAmount = amount;
                 updatePayload.moneyMoved = true;
+                updatePayload.moneyMoveId = current?.moneyMoveId || `move_${requestId}`;
+                updatePayload.transferSourceBank = 'DeasBank';
+                updatePayload.transferDestinationBank = current?.sourceBank || 'Deas Finance';
                 updatePayload.externalBalance = Number(user.saldo || 0);
                 updatePayload.externalDebt = sumDebts(user.dividas || []);
                 updatePayload.externalLimit = Number(user.limite || 0);
+                updatePayload.loansTotal = sumDebts(user.dividas || []);
                 updatePayload.creditScore = Number(user.scoreOriginal || user.score || 500);
-                updatePayload.requestedData = { importedSalary: amount, externalBalance: updatePayload.externalBalance, externalDebt: updatePayload.externalDebt, externalLimit: updatePayload.externalLimit };
+                updatePayload.estimatedIncome = Number(user.renda || user.salario || amount || 0);
+                updatePayload.relationshipSummary = `Conta DeasBank: saldo ${formatOpenFinanceMoney(updatePayload.externalBalance)}, dívidas ${formatOpenFinanceMoney(updatePayload.externalDebt)}, limite ${formatOpenFinanceMoney(updatePayload.externalLimit)}, empréstimos ${formatOpenFinanceMoney(updatePayload.loansTotal)}, score ${updatePayload.creditScore}, renda ${formatOpenFinanceMoney(updatePayload.estimatedIncome)}.`;
+                updatePayload.requestedData = { importedSalary: amount, requestedSalaryAmount: amount, externalBalance: updatePayload.externalBalance, externalDebt: updatePayload.externalDebt, externalLimit: updatePayload.externalLimit, loansTotal: updatePayload.loansTotal, creditScore: updatePayload.creditScore, estimatedIncome: updatePayload.estimatedIncome, relationshipSummary: updatePayload.relationshipSummary }; 
                 await persistCurrentUser();
                 renderDashboard(user);
             }
@@ -722,6 +734,10 @@ async function denyOpenFinanceRequest(requestId, requestType = "") {
     try {
         const current = await getOpenFinanceRequest(requestId);
         const type = requestType || current?.requestType;
+        if (current?.status === "data_approved" || current?.status === "connection_approved") {
+            alert("Esse pedido já foi aprovado e não será processado novamente.");
+            return;
+        }
 
         const nextStatus = type === "data_transfer_request" ? "data_denied" : "connection_denied";
         const message = type === "data_transfer_request"
@@ -778,7 +794,7 @@ async function requestDeasFinanceConnection() {
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
 
-        updateMutualDataVisibility("connection_pending");
+        updateMutualDataVisibility("connection_pending", false);
         alert("Conexão solicitada ao Deas Finance. Agora o Deas Finance pode aceitar ou recusar.");
         loadOpenFinanceRequests();
     } catch (error) {
@@ -797,7 +813,7 @@ async function requestDeasFinanceData() {
         const localSnap = await localRef.get();
         const local = localSnap.exists ? localSnap.data() : null;
 
-        if (!local || !["connection_approved", "data_approved", "data_denied"].includes(local.connectionStatus)) {
+        if (!local || !(local.connectionApproved === true || local.connectionStatus === "connection_approved" || local.connectionStatus === "data_approved" || local.connectionStatus === "data_denied")) {
             alert("Primeiro solicite a conexão e aguarde o Deas Finance aceitar.");
             return;
         }
@@ -805,18 +821,20 @@ async function requestDeasFinanceData() {
         const requestedSalary = Number(prompt("Quanto de salário deseja trazer do Deas Finance?", "3200") || 0);
         if (requestedSalary <= 0) return alert("Informe um valor válido para trazer salário.");
 
+        const moveId = `move_deasbank_to_deasfinance_${currentUserId}_${Date.now()}`;
         const payload = {
             consentId: `deasbank_data_${currentUserId}_${Date.now()}`,
+            moneyMoveId: moveId,
             sourceBank: "DeasBank",
             partnerBank: "Deas Finance",
             userId: currentUserId,
             userName: user.nome || "Cliente DeasBank",
             emailMasked: maskEmailForOpenFinance(user.email),
-            purpose: "solicitacao_transferencia_dados_open_finance",
+            purpose: "solicitacao_transferencia_completa_open_finance",
             requestType: "data_transfer_request",
             sameOwner: true,
-            permissions: { income: true, balance: true, debts: true, creditLimit: true, loans: true },
-            requestedData: { importedSalary: requestedSalary, requestedSalaryAmount: requestedSalary },
+            permissions: { income: true, balance: true, debts: true, creditLimit: true, loans: true, score: true },
+            requestedData: { importedSalary: requestedSalary, requestedSalaryAmount: requestedSalary, requestAllFinancialData: true },
             importedSalary: requestedSalary,
             status: "data_pending",
             direction: "incoming_to_deasfinance",
@@ -828,6 +846,9 @@ async function requestDeasFinanceData() {
         await localRef.set({
             dataRequestId: ref.id,
             connectionStatus: "data_pending",
+            connectionApproved: true,
+            moneyMoveId: moveId,
+            requestedSalary: requestedSalary,
             sharedPayload: { ...payload, partnerRequestId: ref.id },
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
@@ -858,31 +879,42 @@ async function syncDeasFinanceResponse() {
         const status = partner.status || "connection_pending";
         const update = {
             connectionStatus: status,
+            connectionApproved: status === "connection_approved" || status === "data_approved" || status === "data_denied" ? true : (status === "connection_denied" ? false : local.connectionApproved === true),
             sharedPayload: { ...(local.sharedPayload || {}), ...partner, partnerRequestId: requestId },
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
         if (status === "data_approved") {
-            update.importedSalary = Number(partner.importedSalary || partner.requestedData?.importedSalary || 0);
+            update.importedSalary = Number(partner.transferAmount || partner.importedSalary || partner.requestedData?.importedSalary || 0);
             update.externalBalance = Number(partner.externalBalance || partner.requestedData?.externalBalance || 0);
             update.externalDebt = Number(partner.externalDebt || partner.requestedData?.externalDebt || 0);
             update.externalLimit = Number(partner.externalLimit || partner.requestedData?.externalLimit || 0);
+            update.externalLoans = Number(partner.loansTotal || partner.requestedData?.loansTotal || 0);
+            update.externalScore = Number(partner.creditScore || partner.requestedData?.creditScore || 0);
+            update.externalIncome = Number(partner.estimatedIncome || partner.requestedData?.estimatedIncome || update.importedSalary || 0);
+            update.relationshipSummary = partner.relationshipSummary || partner.requestedData?.relationshipSummary || "";
 
             const user = ClientRegistry.get(currentUserId);
             if (user) {
-                user.scoreOriginal = Math.min(950, Number(user.scoreOriginal || 500) + (update.importedSalary >= 3000 ? 30 : 10));
+                user.scoreOriginal = Math.min(950, Math.max(Number(user.scoreOriginal || 500), update.externalScore || 0) + (update.importedSalary >= 3000 ? 30 : 10));
                 user.limite = Math.max(Number(user.limite || 0), update.externalLimit || 0);
-                if (partner.moneyMoved && !local.moneyMovedApplied && update.importedSalary > 0) {
+                const moveId = partner.moneyMoveId || local.moneyMoveId || `move_${requestId}`;
+                const alreadyApplied = local.appliedMoneyMoveId === moveId || Boolean(local.moneyMovedApplied && !moveId);
+                if (partner.moneyMoved && !alreadyApplied && update.importedSalary > 0) {
                     user.saldo = Number(user.saldo || 0) + update.importedSalary;
+                    update.appliedMoneyMoveId = moveId;
                     update.moneyMovedApplied = true;
                     alert(`Salário transferido: ${formatOpenFinanceMoney(update.importedSalary)} entrou no DeasBank.`);
+                } else if (alreadyApplied) {
+                    update.appliedMoneyMoveId = local.appliedMoneyMoveId || moveId;
+                    update.moneyMovedApplied = true;
                 }
                 await persistCurrentUser();
                 renderDashboard(user);
             }
         }
 
-        updateMutualDataVisibility(status);
+        updateMutualDataVisibility(status, update.connectionApproved);
         await localRef.set(update, { merge: true });
         alert(openFinanceStatusLabel(status));
         loadOpenFinanceRequests();
