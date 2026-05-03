@@ -546,137 +546,63 @@ body {
     color: #b00020;
     border-color: #ffc4c4;
 }
+
 @media (max-width: 900px) {
     .of-summary-grid,
     .of-mutual-grid,
     .of-data-grid {
         grid-template-columns: 1fr;
+    }
 }
+
 .of-connected-panel {
     border: 1px solid rgba(110, 70, 48, 0.14);
 }
+
 .of-connected-summary {
     display: grid;
     grid-template-columns: repeat(6, minmax(120px, 1fr));
     gap: 12px;
     margin-top: 14px;
 }
+
 .of-connected-summary > div {
     background: #fff7ef;
     border: 1px solid rgba(110, 70, 48, 0.12);
     border-radius: 16px;
     padding: 14px;
 }
+
 .of-connected-summary small {
     display: block;
     color: #8c6a59;
     font-size: 11px;
     margin-bottom: 6px;
 }
+
 .of-connected-summary strong {
     color: #3f2b22;
     font-size: 16px;
 }
+
 .of-relationship-text {
     margin-top: 12px;
     color: #7d5b4b;
     font-size: 13px;
     line-height: 1.5;
 }
+
 @media (max-width: 1100px) {
     .of-connected-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
 @media (max-width: 640px) {
     .of-connected-summary { grid-template-columns: 1fr; }
 }
-/* Open Finance */
-.of-pro-page{display:block}.of-pro-hero{
-    background:linear-gradient(135deg,#fff6ef,#fff);
-    border:1px solid rgba(91,53,35,.08);
-    border-radius:28px;padding:26px;
-    margin-bottom:22px;
-    box-shadow:0 18px 42px rgba(85,49,30,.08);
-}
-.of-hero-actions{
-    display:flex;
-    gap:10px;
-    flex-wrap:wrap;
-}
-.of-professional-grid{
-    display:grid;
-    grid-template-columns:1.4fr .8fr;
-    gap:18px;margin-bottom:18px;
-}
-.of-pro-card{
-    border-radius:26px!important;
-    box-shadow:0 18px 48px rgba(83,48,28,.08)!important;
-}
-.of-card-head.compact{align-items:flex-start;}
 
-.of-timeline{
-    display:grid;
-    grid-template-columns:repeat(3,1fr);
-    gap:10px;
-    margin:18px 0;
-}
-.of-step{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    background:#fff7f1;
-    border:1px solid rgba(130,74,45,.13);
-    border-radius:18px;padding:12px;
-    font-size:12px;
-    font-weight:800;
-    color:#7b5b4b;
-}
-.of-step b{
-    width:28px;
-    height:28px;
-    border-radius:999px;
-    background:#ecd6c6;
-    color:#4d2d1d;
-    display:grid;
-    place-items:center;
-}
-.of-step.active,.of-step.done{
-    background:#fff;
-    border-color:#8d5b3d;
-    color:#4d2d1d;
-}
-.of-step.done b,.of-step.active b{
-    background:#4d2d1d;
-    color:#fff;
-}
-.of-note{
-    font-size:13px;
-    color:#846858;
-    line-height:1.55;
-}
-.of-action-stack{
-    display:grid;
-    gap:10px;
-    margin-top:14px;
-}
-.of-big-money{
-    display:block;
-    font-size:34px;
-    color:#1f7a3f;
-    margin:10px 0 8px;
-}
-.of-mini-grid,.of-pro-data-grid{
-    display:grid;
-    gap:12px;
-}
-.of-mini-grid.two{grid-template-columns:repeat(2,1fr);}
 
-.of-mini-grid div,.of-pro-data-grid div{
-    background:#fff9f4;
-    border:1px solid rgba(130,74,45,.12);
-    border-radius:18px;
-    padding:14px;
-}
-.of-pro-data-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.of-pro-data-grid small,.of-mini-grid small{display:block;color:#8a6e5d;font-size:12px;font-weight:700;margin-bottom:4px}.of-pro-data-grid strong,.of-mini-grid strong{font-size:17px;color:#3a2116}.of-pro-tabs{background:#fff7f1;border-radius:18px;padding:6px;display:flex;gap:6px}.of-kpi-row{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}.of-kpi-row span{background:#fff7f1;border:1px solid rgba(130,74,45,.12);border-radius:999px;padding:8px 12px;color:#765746}.of-request-card{border:1px solid rgba(130,74,45,.13)!important;border-radius:22px!important;background:#fffdfb!important}.of-actions{display:flex;gap:10px;flex-wrap:wrap}.of-approve{background:#1f7a3f!important;color:#fff!important}.of-deny{background:#fff1f1!important;color:#a82828!important;border:1px solid #ffd0d0!important}.of-result.approved{background:#edfdf3;color:#126d35;border:1px solid #c9f3d8;border-radius:14px;padding:10px;margin-top:10px}.of-result.denied{background:#fff1f1;color:#a82828;border:1px solid #ffd0d0;border-radius:14px;padding:10px;margin-top:10px}@media(max-width:980px){.of-professional-grid,.of-pro-data-grid{grid-template-columns:1fr}.of-timeline{grid-template-columns:1fr}.of-hero-actions{width:100%}}
+/* Open Finance profissional v5 */
+.of-pro-page{display:block}.of-pro-hero{background:linear-gradient(135deg,#fff6ef,#fff);border:1px solid rgba(91,53,35,.08);border-radius:28px;padding:26px;margin-bottom:22px;box-shadow:0 18px 42px rgba(85,49,30,.08)}.of-hero-actions{display:flex;gap:10px;flex-wrap:wrap}.of-professional-grid{display:grid;grid-template-columns:1.4fr .8fr;gap:18px;margin-bottom:18px}.of-pro-card{border-radius:26px!important;box-shadow:0 18px 48px rgba(83,48,28,.08)!important}.of-card-head.compact{align-items:flex-start}.of-timeline{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}.of-step{display:flex;align-items:center;gap:10px;background:#fff7f1;border:1px solid rgba(130,74,45,.13);border-radius:18px;padding:12px;font-size:12px;font-weight:800;color:#7b5b4b}.of-step b{width:28px;height:28px;border-radius:999px;background:#ecd6c6;color:#4d2d1d;display:grid;place-items:center}.of-step.active,.of-step.done{background:#fff;border-color:#8d5b3d;color:#4d2d1d}.of-step.done b,.of-step.active b{background:#4d2d1d;color:#fff}.of-note{font-size:13px;color:#846858;line-height:1.55}.of-action-stack{display:grid;gap:10px;margin-top:14px}.of-big-money{display:block;font-size:34px;color:#1f7a3f;margin:10px 0 8px}.of-mini-grid,.of-pro-data-grid{display:grid;gap:12px}.of-mini-grid.two{grid-template-columns:repeat(2,1fr)}.of-mini-grid div,.of-pro-data-grid div{background:#fff9f4;border:1px solid rgba(130,74,45,.12);border-radius:18px;padding:14px}.of-pro-data-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.of-pro-data-grid small,.of-mini-grid small{display:block;color:#8a6e5d;font-size:12px;font-weight:700;margin-bottom:4px}.of-pro-data-grid strong,.of-mini-grid strong{font-size:17px;color:#3a2116}.of-pro-tabs{background:#fff7f1;border-radius:18px;padding:6px;display:flex;gap:6px}.of-kpi-row{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}.of-kpi-row span{background:#fff7f1;border:1px solid rgba(130,74,45,.12);border-radius:999px;padding:8px 12px;color:#765746}.of-request-card{border:1px solid rgba(130,74,45,.13)!important;border-radius:22px!important;background:#fffdfb!important}.of-actions{display:flex;gap:10px;flex-wrap:wrap}.of-approve{background:#1f7a3f!important;color:#fff!important}.of-deny{background:#fff1f1!important;color:#a82828!important;border:1px solid #ffd0d0!important}.of-result.approved{background:#edfdf3;color:#126d35;border:1px solid #c9f3d8;border-radius:14px;padding:10px;margin-top:10px}.of-result.denied{background:#fff1f1;color:#a82828;border:1px solid #ffd0d0;border-radius:14px;padding:10px;margin-top:10px}@media(max-width:980px){.of-professional-grid,.of-pro-data-grid{grid-template-columns:1fr}.of-timeline{grid-template-columns:1fr}.of-hero-actions{width:100%}}
 
 /* Open Finance v6: organizado antes e depois da conexão */
 .of-danger{background:#fff1f1!important;color:#a82828!important;border:1px solid #ffd0d0!important}
@@ -773,3 +699,27 @@ body {
 #openFinanceSection .of-filter{border-radius:999px!important;}
 #openFinanceSection .of-request-card{border-radius:24px!important;background:#fffaf2!important;border-color:rgba(120,72,0,.10)!important;}
 @media(max-width:900px){#openFinanceSection .of-professional-grid{grid-template-columns:1fr!important;}#openFinanceSection .of-status-card .of-connection-metrics{grid-template-columns:1fr 1fr!important;}}
+
+
+/* ===================== HOTFIX V15 - DASHBOARD MAIS LIMPO ===================== */
+.summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-items: stretch;
+}
+.summary-grid .dash-card {
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.summary-grid .dash-card .btn-action,
+.summary-grid .dash-card .btn-dark {
+    width: 100%;
+    margin-top: 16px;
+}
+@media (max-width: 1200px) {
+    .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 680px) {
+    .summary-grid { grid-template-columns: 1fr; }
+}
