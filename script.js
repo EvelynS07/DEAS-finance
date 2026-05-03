@@ -869,7 +869,7 @@ async function requestDeasFinanceData() {
             return;
         }
 
-        const requestedSalary = Number(prompt("Quanto de salário deseja trazer do Deas Finance?", "3200") || 0);
+        const requestedSalary = Number(prompt("Quanto de salário deseja trazer do Deas Finance para o DeasBank?", "3200") || 0);
         if (requestedSalary <= 0) return alert("Informe um valor válido para trazer salário.");
 
         const moveId = `move_deasbank_to_deasfinance_${currentUserId}_${Date.now()}`;
@@ -904,7 +904,7 @@ async function requestDeasFinanceData() {
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
 
-        alert("Pedido de salário, saldo, dívidas, limite e empréstimos enviado ao Deas Finance.");
+        alert("Pedido para trazer salário enviado ao Deas Finance. Depois que ele aceitar, clique em “Sincronizar respostas”.");
         loadOpenFinanceRequests();
     } catch (error) {
         alert("Erro ao pedir dados: " + error.message);
@@ -1052,7 +1052,7 @@ renderDeasFinanceImportedData = function(local = {}) {
     const summary = document.getElementById('ofRelationshipSummaryBank');
     if (summary) {
         const hasData = status === 'data_approved' || Number(local.importedSalary || payload.importedSalary || payload.transferAmount || 0) > 0;
-        summary.innerText = hasData ? (local.relationshipSummary || payload.relationshipSummary || 'Dados recebidos com consentimento.') : 'Conta conectada. Solicite “Portabilidade: trazer salário e dados” para preencher esta visão.';
+        summary.innerText = hasData ? (local.relationshipSummary || payload.relationshipSummary || 'Dados recebidos com consentimento.') : 'Conta conectada. Solicite “Trazer salário” para preencher esta visão.';
     }
     updateMutualDataVisibility(status, local.connectionApproved === true || ['connection_approved','data_pending','data_approved','data_denied'].includes(status));
     refreshOpenFinanceMirrors();
@@ -1938,6 +1938,126 @@ syncDeasFinanceResponse = async function() {
         loadOpenFinanceRequests();
     } catch (error) {
         alert('Erro ao verificar resposta: ' + error.message);
+        console.error(error);
+    }
+};
+
+
+/* ===================== HOTFIX V16 - PAGAR DIVIDA COM SALDO DISPONIVEL ===================== */
+async function payDebt(index) {
+    const user = ClientRegistry.get(currentUserId);
+    if (!user || !Array.isArray(user.dividas) || !user.dividas[index]) return alert('Dívida não encontrada.');
+    const divida = user.dividas[index];
+    const valor = Number(divida.valor || 0);
+    const saldoDisponivel = Number(user.saldo || 0);
+    const limiteDisponivel = Number(user.limite || 0);
+    const totalDisponivel = saldoDisponivel + limiteDisponivel;
+
+    if (totalDisponivel < valor) {
+        alert(`Saldo insuficiente. Você tem ${formatOpenFinanceMoney(saldoDisponivel)} em saldo disponível e ${formatOpenFinanceMoney(limiteDisponivel)} em limite.`);
+        return;
+    }
+
+    const usaSaldo = Math.min(saldoDisponivel, valor);
+    const usaLimite = valor - usaSaldo;
+    const textoFonte = usaLimite > 0
+        ? `${formatOpenFinanceMoney(usaSaldo)} do saldo disponível + ${formatOpenFinanceMoney(usaLimite)} do limite`
+        : `${formatOpenFinanceMoney(usaSaldo)} do saldo disponível`;
+
+    if (!confirm(`Confirmar pagamento de ${formatOpenFinanceMoney(valor)} para ${divida.empresa}?\n\nSerá usado: ${textoFonte}.`)) return;
+
+    user.saldo = saldoDisponivel - usaSaldo;
+    user.limite = limiteDisponivel - usaLimite;
+    user.dividas.splice(index, 1);
+    user.ultimaFormaPagamentoDivida = usaLimite > 0 ? 'saldo_e_limite' : 'saldo_disponivel';
+    user.lastDebtPaymentDescription = `Pagamento de ${formatOpenFinanceMoney(valor)} usando ${textoFonte}.`;
+
+    renderDashboard(user);
+    await persistCurrentUser();
+    alert(`Dívida paga com sucesso usando ${textoFonte}.`);
+}
+
+
+/* ===================== HOTFIX V18 - DEASBANK TAMBEM TRAZ SALARIO DO DEAS FINANCE ===================== */
+function ofV18SetBringSalaryButtons(status, connectionApproved = false) {
+    const normalized = String(status || '');
+    const hasApprovedConnection = connectionApproved === true || ['connection_approved', 'data_pending', 'data_approved', 'data_denied'].includes(normalized);
+    const canBringSalary = hasApprovedConnection && ['connection_approved', 'data_approved', 'data_denied'].includes(normalized);
+    ['requestDeasFinanceDataCard', 'bringSalaryHeaderBtn', 'bringSalaryHelper'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('hidden', !canBringSalary);
+    });
+    const btn = document.getElementById('requestDeasFinanceDataCard');
+    if (btn) btn.textContent = 'Trazer salário';
+    const headerBtn = document.getElementById('bringSalaryHeaderBtn');
+    if (headerBtn) headerBtn.textContent = 'Trazer salário';
+}
+const ofV18PreviousUpdateVisibility = updateMutualDataVisibility;
+updateMutualDataVisibility = function(connectionStatus, connectionApproved = false) {
+    if (typeof ofV18PreviousUpdateVisibility === 'function') {
+        ofV18PreviousUpdateVisibility(connectionStatus, connectionApproved);
+    }
+    ofV18SetBringSalaryButtons(connectionStatus, connectionApproved);
+};
+const ofV18PreviousRequestSalary = requestDeasFinanceData;
+requestDeasFinanceData = async function() {
+    if (!deasBankDb || !deasFinanceDb) return alert('Firebase não iniciou corretamente.');
+    const user = ClientRegistry.get(currentUserId);
+    if (!user) return alert('Entre na sua conta primeiro.');
+    try {
+        const localRef = deasBankDb.collection('users').doc(currentUserId).collection('openFinanceConnections').doc('deasfinance');
+        const localSnap = await localRef.get();
+        const local = localSnap.exists ? localSnap.data() : null;
+        const status = String(local?.connectionStatus || local?.sharedPayload?.connectionStatus || local?.sharedPayload?.status || '');
+        const approved = local?.connectionApproved === true || ['connection_approved', 'data_approved', 'data_denied'].includes(status);
+        if (!local || !approved) {
+            alert('Primeiro solicite a conexão e aguarde o Deas Finance aceitar.');
+            return;
+        }
+        const suggestion = Number(local.importedSalary || local.requestedSalary || user.renda || user.salario || 3200) || 3200;
+        const requestedSalary = Number(prompt('Quanto de salário deseja trazer do Deas Finance para o DeasBank?', String(suggestion)) || 0);
+        if (requestedSalary <= 0) return alert('Informe um valor válido para trazer salário.');
+        const moveId = `move_deasfinance_to_deasbank_${currentUserId}_${Date.now()}`;
+        const payload = {
+            consentId: `deasbank_salary_${currentUserId}_${Date.now()}`,
+            moneyMoveId: moveId,
+            sourceBank: 'DeasBank',
+            partnerBank: 'Deas Finance',
+            userId: currentUserId,
+            userName: user.nome || user.name || 'Cliente DeasBank',
+            emailMasked: maskEmailForOpenFinance(user.email),
+            purpose: 'trazer_salario_do_deas_finance',
+            requestType: 'data_transfer_request',
+            sameOwner: true,
+            permissions: { income: true, balance: true, debts: true, creditLimit: true, loans: true, score: true, salaryPortability: true },
+            requestedData: {
+                importedSalary: requestedSalary,
+                requestedSalaryAmount: requestedSalary,
+                requestAllFinancialData: true,
+                salaryPortability: true
+            },
+            importedSalary: requestedSalary,
+            status: 'data_pending',
+            direction: 'salary_from_deasfinance_to_deasbank',
+            createdAtText: new Date().toISOString(),
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        const ref = await deasFinanceDb.collection('openFinanceRequests').add(payload);
+        await localRef.set({
+            dataRequestId: ref.id,
+            connectionStatus: 'data_pending',
+            connectionApproved: true,
+            moneyMoveId: moveId,
+            requestedSalary,
+            lastSalaryRequestDirection: 'deasfinance_to_deasbank',
+            sharedPayload: { ...payload, partnerRequestId: ref.id, connectionStatus: 'data_pending' },
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        updateMutualDataVisibility('data_pending', true);
+        alert('Pedido para trazer salário enviado ao Deas Finance. Depois que ele aceitar, clique em “Sincronizar respostas”.');
+        loadOpenFinanceRequests();
+    } catch (error) {
+        alert('Erro ao trazer salário: ' + error.message);
         console.error(error);
     }
 };

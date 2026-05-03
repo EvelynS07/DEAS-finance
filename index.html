@@ -6,6 +6,16 @@
     <title>DEASBank|Banco Digital</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <style>
+      /* HOTFIX V16: dashboard principal DeasBank */
+      #mainDashboard .bank-main-summary{display:grid!important;grid-template-columns:minmax(260px,1.18fr) repeat(3,minmax(180px,1fr))!important;gap:22px!important;align-items:stretch!important;margin-bottom:30px!important;}
+      #mainDashboard .bank-main-summary .dash-card{min-height:230px!important;border-radius:24px!important;box-shadow:0 18px 38px rgba(33,18,11,.10)!important;border:1px solid rgba(230,81,0,.14)!important;}
+      #mainDashboard .bank-main-summary .score-dashboard-card{background:linear-gradient(145deg,#fff3dc,#ffd79a)!important;}
+      #mainDashboard .bank-main-summary .dash-card:not(.score-dashboard-card){display:flex!important;flex-direction:column!important;justify-content:space-between!important;}
+      #mainDashboard .bank-main-summary .btn-action{width:100%!important;margin-top:16px!important;}
+      @media(max-width:1320px){#mainDashboard .bank-main-summary{grid-template-columns:repeat(2,minmax(240px,1fr))!important;}#mainDashboard .bank-main-summary .score-dashboard-card{grid-row:span 2!important;}}
+      @media(max-width:760px){#mainDashboard .bank-main-summary{grid-template-columns:1fr!important;}#mainDashboard .bank-main-summary .score-dashboard-card{grid-row:auto!important;}}
+    </style>
 </head>
 <body>
     <!-- ÁREA DE AUTENTICAÇÃO -->
@@ -81,8 +91,8 @@
                 <p>Aqui está o resumo da sua saúde financeira.</p>
             </header>
 
-            <div class="summary-grid">
-               <div class="dash-card" style="text-align: center;">
+            <div class="summary-grid bank-main-summary">
+               <div class="dash-card score-dashboard-card" style="text-align: center;">
                  <h3>Score de Crédito</h3>
                     <div class="score-container">
                         <svg viewBox="0 0 36 36" class="circular-chart">
@@ -164,6 +174,7 @@
                 <div class="of-hero-actions">
                     <button class="btn-action" onclick="syncDeasFinanceResponse()">Sincronizar respostas</button>
                     <button class="btn-action" onclick="loadOpenFinanceRequests()">Atualizar</button>
+                    <button class="btn-action hidden" id="bringSalaryHeaderBtn" onclick="requestDeasFinanceData()">Trazer salário</button>
                     <button class="btn-action of-danger hidden" id="disconnectDeasFinanceBtn" onclick="disconnectDeasFinanceConnection()">Desconectar contas</button>
                 </div>
             </header>
@@ -185,7 +196,8 @@
                     <p class="of-note">A senha nunca é compartilhada. O cliente autoriza conexão, dados financeiros e portabilidade de salário separadamente.</p>
                     <div class="of-action-stack">
                         <button class="btn-dark" onclick="requestDeasFinanceConnection()">Pedir conexão ao Deas Finance</button>
-                        <button class="btn-dark hidden" id="requestDeasFinanceDataCard" onclick="requestDeasFinanceData()">Portabilidade: trazer salário e dados</button>
+                        <button class="btn-dark hidden" id="requestDeasFinanceDataCard" onclick="requestDeasFinanceData()">Trazer salário</button>
+                        <p class="of-salary-helper hidden" id="bringSalaryHelper">Solicite ao Deas Finance o salário/renda, saldo, dívidas, limite, empréstimos e score. Ao aceitar, o valor entra no saldo disponível do DeasBank.</p>
                     </div>
                 </section>
 
